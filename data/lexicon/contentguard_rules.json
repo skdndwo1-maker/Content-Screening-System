@@ -1,0 +1,2546 @@
+{
+  "_meta": {
+    "title": "ContentGuard 판정 규칙 (통합본)",
+    "version": "2026-10-17",
+    "reading_order": "키 번호 순서대로 적용한다. 앞 번호 규칙이 뒤 번호보다 우선한다.",
+    "companion": "단어 사전은 TERMS 탭의 contentguard_terms.json을 참조한다."
+  },
+  "01_absolute_rules": [
+    "단어의 존재만으로 위험을 확정하지 않는다. 반드시 사용 맥락을 함께 판단한다.",
+    "등록된 위험 표현이 없더라도 콘텐츠 전체 의미가 차별·비하·조롱·고정관념·사회적 논란을 유발할 가능성이 있으면 RISK CANDIDATE로 판단한다.",
+    "사전에 없는 표현을 '안전'의 근거로 삼지 않는다. 미등록 표현은 PATTERN RULE과 의미 추론으로 판단한다.",
+    "확신이 낮으면 안전 또는 위험을 임의로 확정하지 말고 HUMAN REVIEW REQUIRED로 처리한다.",
+    "탐지에서 끝내지 않는다. 브랜드의 원래 커뮤니케이션 목적을 유지하면서 위험을 줄이는 대안을 함께 제시한다.",
+    "FALSE NEGATIVE와 FALSE POSITIVE를 동시에 최소화한다.",
+    "상업적 홍보물은 원칙적으로 보도·교육·비판 목적 예외의 적용 대상이 아니다.",
+    "MINOR·SELF_HARM 관련 항목은 애매하면 항상 HUMAN REVIEW로 처리한다(미탐 비용이 압도적으로 크다)."
+  ],
+  "02_hidden_text_detection": {
+    "purpose": "사전 단어를 그대로 쓰지 않고, 글자를 쪼개거나 순서를 바꾸거나 여러 문장에 흩어 숨긴 경우를 잡는다. 예: '한번도 경험해보지 못한 / 남들에게 양보하기 싫은 / 충분히 가성비인 지금' → 각 줄 첫 글자 = '한남충'.",
+    "division_of_labor": {
+      "code": "읽기 경로를 빠짐없이 생성하고 사전(hidden_scan)과 대조해 후보를 만든다. 글자 단위 조합은 반드시 코드가 수행한다.",
+      "ai": "코드가 만든 후보가 의도된 은닉인지, 아는 사람이 보면 그렇게 읽히는지 판단한다. AI는 후보에 없는 단어를 지어내지 않는다.",
+      "why": "LLM은 토큰 단위로 글을 읽어 글자 단위 조합(첫 글자 모으기, 역순, 초성)을 자주 놓치거나 지어낸다."
+    },
+    "grid_build": [
+      "텍스트: 줄바꿈 기준으로 줄을 나누고 각 줄을 글자 배열로 만든다. 줄 번호와 칸 번호를 0이 아닌 1부터 매긴다.",
+      "이미지: OCR 글자 단위 좌표로 행·열을 재구성한다. 각 글자에 색·굵기·크기·기울기를 기록한다.",
+      "영상: 자막·화면 텍스트를 시간순 줄로 본다."
+    ],
+    "read_paths": [
+      {
+        "id": "LINE_FIRST",
+        "desc": "각 줄의 첫 글자를 위에서 아래로"
+      },
+      {
+        "id": "LINE_LAST",
+        "desc": "각 줄의 마지막 글자를 위에서 아래로"
+      },
+      {
+        "id": "LINE_NTH",
+        "desc": "각 줄의 n번째 글자 (n=2,3)"
+      },
+      {
+        "id": "WORD_FIRST",
+        "desc": "어절(띄어쓰기 단위)마다 첫 글자"
+      },
+      {
+        "id": "WORD_LAST",
+        "desc": "어절마다 마지막 글자"
+      },
+      {
+        "id": "SENTENCE_FIRST",
+        "desc": "문장(마침표·느낌표·물음표 단위)마다 첫 글자"
+      },
+      {
+        "id": "COLUMN",
+        "desc": "격자의 같은 열을 세로로"
+      },
+      {
+        "id": "DIAGONAL",
+        "desc": "격자의 대각선 (좌상→우하, 우상→좌하)"
+      },
+      {
+        "id": "REVERSE",
+        "desc": "위 모든 경로와 원문의 역순"
+      },
+      {
+        "id": "SKIP_K",
+        "desc": "원문에서 k칸마다 한 글자 (k=2,3)"
+      },
+      {
+        "id": "EMPHASIS",
+        "desc": "색·굵기·크기·밑줄 등으로 다르게 처리된 글자만 순서대로"
+      },
+      {
+        "id": "STRIPPED",
+        "desc": "공백·특수문자·이모지를 제거한 원문"
+      },
+      {
+        "id": "NUMBERS",
+        "desc": "숫자만 이어 읽기 (날짜·기호 코드 대조용)"
+      }
+    ],
+    "normalize_each_path": [
+      "원형 음절열",
+      "초성열 (예: 한남충 → ㅎㄴㅊ)",
+      "자모 분리열",
+      "숫자·영문 치환 복원 (1→ㅣ, 0→ㅇ, 영문 로마자 → 한글 음차)",
+      "한영 자판 오타 복원 (gksskacnd → 한남충)",
+      "유사 음절 치환 (편집거리 1 이내: 짱깨/짱께/짱개)"
+    ],
+    "matching": {
+      "dictionary": "contentguard_terms.json → hidden_scan.strict / hidden_scan.contextual (+ 각 term의 match_keys)",
+      "rules": [
+        "2음절 단어는 경로 전체와 정확히 일치할 때(줄 2개의 첫 글자 = 단어)만 후보로 올린다. 긴 경로 속 부분 일치는 강조(EMPHASIS) 신호가 있을 때만.",
+        "3음절 이상 단어는 경로 속 부분 일치도 후보로 올린다.",
+        "1음절은 은닉 탐지 대상에서 제외한다 (예: 충, 놈). 다른 은닉 신호와 같이 나올 때만 참고로 기록.",
+        "contextual 목록 단어는 아래 점수에서 강조 또는 경로 전체 일치 가산이 없으면 버린다.",
+        "allow_list 맥락과 겹치면 감점한다."
+      ]
+    },
+    "scoring": {
+      "base_by_severity": {
+        "CRITICAL": 50,
+        "HIGH": 40,
+        "CAUTION": 25,
+        "LOW": 10
+      },
+      "add": [
+        {
+          "if": "경로 전체가 단어와 정확히 일치 (예: 3줄 첫 글자 = 3음절 단어)",
+          "score": 30
+        },
+        {
+          "if": "해당 글자들만 시각적으로 강조됨",
+          "score": 30
+        },
+        {
+          "if": "같은 콘텐츠의 다른 경로에서 위험 단어가 추가로 잡힘",
+          "score": 15
+        },
+        {
+          "if": "해당 글자를 맞추려 문장이 부자연스러움 (AI 판단)",
+          "score": 15
+        },
+        {
+          "if": "게시 채널이 SNS (캡처·확산 용이)",
+          "score": 5
+        }
+      ],
+      "subtract": [
+        {
+          "if": "contextual 단어이고 다른 신호 없음",
+          "score": -30
+        },
+        {
+          "if": "allow_list 맥락과 일치",
+          "score": -30
+        },
+        {
+          "if": "부분 일치이며 경로 길이가 10글자 이상",
+          "score": -15
+        }
+      ],
+      "thresholds": {
+        "high": 70,
+        "caution": 40,
+        "drop_below": 25
+      }
+    },
+    "ai_judgment_prompt": [
+      "너는 브랜드 콘텐츠의 은닉 혐오 표현 검수관이다. 코드가 찾은 '숨은 단어 후보'가 주어진다.",
+      "각 후보마다 판단하라: (1) 추출 경로가 콘텐츠 구조와 맞아떨어지는가 (줄 수 = 글자 수 등) (2) 해당 글자에 시각적 강조가 있는가 (3) 그 글자를 맞추려고 문장이 부자연스러워졌는가 (4) 다른 은닉 신호가 같이 있는가 (5) 그 단어를 아는 사람이 캡처해서 퍼뜨릴 때 설득력이 있는가.",
+      "의도 여부와 무관하게 (5)를 만족하면 최소 '주의'로 판정한다.",
+      "후보 목록에 없는 단어를 새로 만들어내지 않는다.",
+      "애매하면 '미검증'으로 두고 사람 검토를 요청한다.",
+      "대안 문구는 원래 메시지·톤을 유지하면서 해당 글자만 바꾼다."
+    ],
+    "ai_open_search": {
+      "instruction": "read_paths 외에 숨은 단어를 만드는 다른 읽기 방법이 있으면 찾는다. 반드시 추출 규칙과 정확한 글자 위치를 함께 제시한다.",
+      "required_format": {
+        "rule": "예: 각 줄 2번째 글자",
+        "positions": [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            2
+          ],
+          [
+            3,
+            2
+          ]
+        ],
+        "result": "추출된 문자열"
+      },
+      "verification": "코드가 rule과 positions를 실제로 적용해 result와 일치할 때만 후보로 채택한다. 불일치는 폐기한다. 채택된 규칙은 read_paths에 추가를 검토한다."
+    },
+    "remediation_recheck": "AI가 제안한 대안 문구는 같은 은닉 탐지를 다시 돌려 새 위험 단어가 생기지 않는지 확인한 뒤에만 보여준다.",
+    "output_fields": [
+      "term",
+      "matched_ids",
+      "path_id",
+      "positions",
+      "normalization",
+      "code_score",
+      "verdict",
+      "intent_likelihood",
+      "reason",
+      "fix"
+    ]
+  },
+  "03_evasion_normalization": {
+    "rule": "원형 복원 후 대조한다. 단순 문자열 유사성만으로 위험을 확정하지 않는다 (예: 한남동은 지명, 개발자의 '개'는 욕설 아님).",
+    "methods": [
+      "초성 축약 복원 (ㅎㄴㅊ, ㅄ, ㅁㅊ)",
+      "띄어쓰기 제거 (한 남 충)",
+      "숫자 치환 복원 (한1남, 씨1발)",
+      "영문 혼합·로마자 음차 (hannam, 한남chung)",
+      "자모 결합 (ㅎㅏㄴㄴㅏㅁ)",
+      "특수문자 제거 (한*남*충, 한.남.충)",
+      "의도적 오탈자 편집거리 1~2 (한남춍)",
+      "음성적 유사 (짱깨/짱께/짱개)",
+      "이미지 OCR·자막·음성 전사·밈 내부 텍스트에도 동일 적용"
+    ]
+  },
+  "04_context_exception": {
+    "downgrade": {
+      "NEWS_REPORTING": "1~2단계 하향 가능",
+      "ACADEMIC_RESEARCH": "1~2단계 하향 가능",
+      "EDUCATION": "1~2단계 하향 가능",
+      "HISTORICAL_DOCUMENTATION": "1~2단계 하향 가능",
+      "ANTI_HATE_CAMPAIGN": "1~2단계 하향 가능",
+      "CRITICISM": "1~2단계 하향 가능",
+      "QUOTATION": "1단계 하향 가능",
+      "CONTENT_MODERATION": "1~2단계 하향 가능"
+    },
+    "re_upgrade_if": [
+      "목적 달성에 불필요한 수준으로 혐오표현을 반복·강조",
+      "자극적 이미지로 소비되도록 편집",
+      "비판 대상과 지지 대상이 불분명해 조롱으로 읽힐 여지가 큼",
+      "브랜드 광고·프로모션 맥락 (상업적 홍보물은 원칙적으로 예외 미적용)"
+    ]
+  },
+  "05_combination_risk": {
+    "rule": "개별 요소가 모두 LOW여도 결합으로 새 의미가 생기면 결합 결과에 별도 등급을 부여한다. 평균이 아니라 결합 의미 자체로 판단한다.",
+    "types": [
+      "Image + Copy: 무해한 이미지와 카피가 겹쳐 성적·조롱적 의미 발생",
+      "Symbol + Color: 방사형 패턴 + 적백 배색 → 욱일기 연상",
+      "Person + Gesture: 인물 + 특정 손동작 → 커뮤니티 상징 연상 (손 모양·각도·반복 확인)",
+      "Historical Image + Ad Copy: 역사적 피해의 상업적 차용",
+      "Region + Political Expression: 지역과 정치성향을 결합한 일반화",
+      "Gender + Occupation: 성별과 직업의 고정 배치 반복",
+      "Nationality + Crime: 국적과 범죄성 연결",
+      "Age + Ability: 연령과 무능력 연결",
+      "Disability + Humor: 장애를 웃음 소재로 사용",
+      "Disaster Image + Promotion: 참사 연상 구도·색·배치와 홍보 결합",
+      "Date + Event: 추모일 게시 + 축하성 문구",
+      "Number + Context: 숫자의 상징적 사용 (극단주의·조롱 코드)",
+      "Hidden Text + Normal Copy: 정상 카피 속 은닉 단어 (02_hidden_text_detection)"
+    ]
+  },
+  "06_pattern_rules": {
+    "meta_rule": "공통 구조: [집단 지시어] + [부정적 속성·능력·역할·가치 판단] → RISK CANDIDATE. 집단 지시어에는 성별, 연령, 지역, 국적, 인종, 종교, 직업, 학력, 소득, 주거형태, 장애, 질환, 혼인 상태, 가족 형태, 성적 지향, 정치 성향이 포함된다.",
+    "patterns": [
+      {
+        "id": "PATTERN-GENERAL-001",
+        "pattern": "집단 + 열등함",
+        "category": "MULTI",
+        "risk": "GROUP_GENERALIZATION",
+        "severity": "HIGH",
+        "examples": [
+          "○○ 출신은 수준이 낮다",
+          "○○들은 원래 그렇다",
+          "역시 ○○"
+        ],
+        "agent_instruction": "집단 명칭 뒤에 전칭 표현('다', '원래', '역시')과 부정적 평가가 결합하면 금칙어 유무와 무관하게 RISK CANDIDATE로 판단한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-002",
+        "pattern": "집단 + 범죄성",
+        "category": "CRIME",
+        "risk": "CRIME_GENERALIZATION",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○ 출신 범죄 많다",
+          "○○은 조심해야",
+          "○○ 많은 동네는 위험"
+        ],
+        "agent_instruction": "집단 정체성과 범죄·위험성을 연결하면 CRITICAL에서 판정을 시작한다. 개별 사건 보도와 집단 일반화를 구분한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-003",
+        "pattern": "집단 + 비위생성",
+        "category": "MULTI",
+        "risk": "HYGIENE_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "○○ 사람들은 더럽다",
+          "○○ 음식은 위생이",
+          "○○ 오면 지저분해진다"
+        ],
+        "agent_instruction": "위생·청결 어휘가 집단 정체성과 결합하면 위험. 식품·여행 콘텐츠에서 빈발한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-004",
+        "pattern": "집단 + 무능력",
+        "category": "MULTI",
+        "risk": "ABILITY_GENERALIZATION",
+        "severity": "HIGH",
+        "examples": [
+          "여자는 운전을 못한다",
+          "노인은 기계를 못 다룬다",
+          "장애인은 일을 못한다",
+          "고졸은 이해를 못한다"
+        ],
+        "agent_instruction": "능력 서술이 개인이 아니라 집단에 부여되면 위험. 광고 연출에서 '못 하는 역할'을 특정 집단에만 배정하는 것도 포함한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-005",
+        "pattern": "집단 + 성적 대상화",
+        "category": "SEXUAL_HARASSMENT",
+        "risk": "OBJECTIFICATION",
+        "severity": "HIGH",
+        "examples": [
+          "○○ 여자는 다 예쁘다",
+          "○○ 직업 여성은",
+          "○○ 나라 여자는"
+        ],
+        "agent_instruction": "칭찬 형태여도 집단을 성적·외모적 특성으로 환원하면 위험."
+      },
+      {
+        "id": "PATTERN-GENERAL-006",
+        "pattern": "집단 + 사회적 배제 / 제거",
+        "category": "EXTREMISM",
+        "risk": "EXCLUSION",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○은 나가야",
+          "○○ 없는 세상",
+          "○○ 출입 금지",
+          "○○ 퇴출"
+        ],
+        "agent_instruction": "집단의 물리적 배제·제거를 언급하면 혐오 선동 단계로 판단한다. 마케팅 카피의 과장 표현이라도 대상이 사람 집단이면 CRITICAL."
+      },
+      {
+        "id": "PATTERN-GENERAL-007",
+        "pattern": "집단 + 동물·벌레 비유",
+        "category": "DEHUMANIZATION",
+        "risk": "ANIMAL_METAPHOR",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○충",
+          "○○들은 벌레 같다",
+          "○○는 짐승이다"
+        ],
+        "agent_instruction": "가장 강한 혐오 지표다. 접미 '-충' 조어는 사전 등재 여부와 무관하게 패턴으로 탐지한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-008",
+        "pattern": "집단 + 경제적 가치 환원",
+        "category": "SOCIAL_CLASS",
+        "risk": "ECONOMIC_OBJECTIFICATION",
+        "severity": "HIGH",
+        "examples": [
+          "○○은 세금만 축낸다",
+          "○○은 사회적 비용",
+          "○○ 부양 부담"
+        ],
+        "agent_instruction": "사람을 비용·부담으로 서술하면 위험. 고령화·복지 관련 콘텐츠에서 빈발한다."
+      },
+      {
+        "id": "PATTERN-GENERAL-009",
+        "pattern": "집단 + 지능",
+        "category": "MULTI",
+        "risk": "INTELLIGENCE_GENERALIZATION",
+        "severity": "HIGH",
+        "examples": [
+          "○○ 나온 사람은 머리가",
+          "○○들은 무식하다",
+          "○○ 지지자는 생각이 없다"
+        ],
+        "agent_instruction": "지능·학습 능력을 집단 정체성에 귀속시키면 위험. 학벌·정치·지역과 결합하는 경우가 많다."
+      },
+      {
+        "id": "PATTERN-GENERAL-010",
+        "pattern": "집단 + 특정 질병",
+        "category": "MENTAL_HEALTH",
+        "risk": "DISEASE_STIGMA",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○은 병 옮긴다",
+          "○○ = 감염원",
+          "○○은 정신적으로 문제"
+        ],
+        "agent_instruction": "질병과 집단 정체성의 연결은 감염병 시기 이후 특히 민감하다."
+      },
+      {
+        "id": "PATTERN-GENDER-001",
+        "pattern": "성별 + 역할 고정",
+        "category": "GENDER",
+        "risk": "ROLE_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "여자는 살림을",
+          "남자는 돈을 벌어야",
+          "남자는 울면 안 된다",
+          "여자니까 꼼꼼하다"
+        ],
+        "agent_instruction": "긍정적 서술('여자니까 섬세하다')도 성별 본질화이므로 동일하게 판정한다. 브랜드 카피에서 가장 흔한 유형이다."
+      },
+      {
+        "id": "PATTERN-GENDER-002",
+        "pattern": "성별 + 직업 고정 배치",
+        "category": "GENDER",
+        "risk": "OCCUPATION_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "의사=남성, 간호사=여성 연출",
+          "임원=남성, 비서=여성",
+          "요리하는 사람=여성"
+        ],
+        "agent_instruction": "텍스트가 아니라 이미지·영상의 배역 배치에서 주로 발생한다. 등장인물의 성별과 역할 분포를 확인한다."
+      },
+      {
+        "id": "PATTERN-GENDER-003",
+        "pattern": "외모 + 인간 가치",
+        "category": "PHYSICAL_APPEARANCE",
+        "risk": "APPEARANCE_VALUE",
+        "severity": "HIGH",
+        "examples": [
+          "예뻐야 사랑받는다",
+          "살 빼면 인생이 바뀐다",
+          "외모도 경쟁력"
+        ],
+        "agent_instruction": "외모 개선을 인생·인격·관계의 개선과 직결하는 서사를 탐지한다. 뷰티·다이어트 광고의 전형적 구조다."
+      },
+      {
+        "id": "PATTERN-AGE-001",
+        "pattern": "나이 + 능력 고정",
+        "category": "AGE",
+        "risk": "AGE_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "나이 들면 안 된다",
+          "젊어야 가능하다",
+          "○○살이면 늦었다"
+        ],
+        "agent_instruction": "연령을 자격 요건으로 제시하는 서술을 탐지한다. 채용·교육 광고에서 특히 위험."
+      },
+      {
+        "id": "PATTERN-REGION-001",
+        "pattern": "지역 + 성격 일반화",
+        "category": "REGION",
+        "risk": "REGIONAL_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "○○ 사람은 무뚝뚝",
+          "○○는 정이 많다",
+          "○○ 출신이라 그렇다"
+        ],
+        "agent_instruction": "긍정·부정 모두 지역 본질화로 판정한다."
+      },
+      {
+        "id": "PATTERN-NATION-001",
+        "pattern": "국적 + 범죄·신뢰도 일반화",
+        "category": "NATIONALITY",
+        "risk": "CRIME_GENERALIZATION",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○인은 사기를 잘 친다",
+          "○○ 제품은 못 믿는다",
+          "○○인은 시끄럽다"
+        ],
+        "agent_instruction": "제품 품질 비교와 국민성 일반화를 구분한다. 후자면 CRITICAL."
+      },
+      {
+        "id": "PATTERN-DISABILITY-001",
+        "pattern": "장애 + 무능력 / 불행",
+        "category": "DISABILITY",
+        "risk": "DISABILITY_STEREOTYPE",
+        "severity": "HIGH",
+        "examples": [
+          "장애가 있어도 해냈다(극복 서사)",
+          "장애인은 도움이 필요하다",
+          "불편한 몸으로"
+        ],
+        "agent_instruction": "감동 서사(inspiration porn)도 장애를 결핍으로 전제하므로 CAUTION 이상으로 판정한다. 장애인을 시혜 대상으로만 배치하는 연출을 탐지한다."
+      },
+      {
+        "id": "PATTERN-MENTAL-001",
+        "pattern": "정신질환 + 위험성",
+        "category": "MENTAL_HEALTH",
+        "risk": "CRIME_GENERALIZATION",
+        "severity": "CRITICAL",
+        "examples": [
+          "정신병력이 있는 범인",
+          "약을 안 먹어서",
+          "정신이 온전치 않아서"
+        ],
+        "agent_instruction": "가해자 설정에 정신질환을 부여하는 서사 구조 자체를 위험 요소로 판단한다."
+      },
+      {
+        "id": "PATTERN-CLASS-001",
+        "pattern": "경제계층 + 인간 가치",
+        "category": "SOCIAL_CLASS",
+        "risk": "CLASS_DISCRIMINATION",
+        "severity": "HIGH",
+        "examples": [
+          "돈 없으면 무시당한다",
+          "성공한 사람만 자격",
+          "○○ 사는 사람들 수준"
+        ],
+        "agent_instruction": "소득·자산·거주지가 인격 평가의 근거로 쓰이는지 확인한다."
+      },
+      {
+        "id": "PATTERN-VICTIM-001",
+        "pattern": "피해자 + 책임 전가",
+        "category": "VICTIM_BLAMING",
+        "risk": "VICTIM_BLAMING",
+        "severity": "CRITICAL",
+        "examples": [
+          "조심했으면 안 당했다",
+          "빌미를 줬다",
+          "왜 그 시간에",
+          "당할 만한 이유가"
+        ],
+        "agent_instruction": "안전·보안 광고의 문제 제기 파트에서 무의식적으로 발생한다. 예방 주체를 피해자로 설정했는지 확인한다."
+      },
+      {
+        "id": "PATTERN-DISASTER-001",
+        "pattern": "재난 어휘 + 상업적 목적",
+        "category": "SOCIAL_DISASTER",
+        "risk": "COMMERCIAL_APPROPRIATION",
+        "severity": "HIGH",
+        "examples": [
+          "참사급 할인",
+          "재난 수준 가격",
+          "폭탄 세일(재난 직후)",
+          "생존 필수템"
+        ],
+        "agent_instruction": "평시에는 과장 표현으로 통용되나 실제 재난 발생 직후에는 CRITICAL로 상향한다. 게시 예정일 기준으로 최근 재난 발생 여부를 확인한다."
+      },
+      {
+        "id": "PATTERN-POLITICS-001",
+        "pattern": "정치 성향 + 인격 판단",
+        "category": "POLITICS",
+        "risk": "POLITICAL_SLUR",
+        "severity": "CRITICAL",
+        "examples": [
+          "○○ 지지자는 다 이상하다",
+          "그쪽 사람들은 원래",
+          "정상적인 사람이면 ○○ 안 찍는다"
+        ],
+        "agent_instruction": "브랜드는 정치적 입장 표명 자체를 피해야 한다. 중립적으로 보이는 표현도 진영 프레임을 담고 있는지 확인한다."
+      },
+      {
+        "id": "PATTERN-EXCLUSION-001",
+        "pattern": "우리 / 그들 이분법",
+        "category": "MULTI",
+        "risk": "OTHERING",
+        "severity": "HIGH",
+        "examples": [
+          "진짜 한국인이라면",
+          "정상적인 사람은",
+          "우리 같은 사람들은"
+        ],
+        "agent_instruction": "'정상', '진짜', '우리'가 특정 집단을 경계 밖으로 밀어내는 기능을 하는지 확인한다. 배타적 소속감을 자극하는 카피에서 빈발한다."
+      },
+      {
+        "id": "PATTERN-NORMATIVITY-001",
+        "pattern": "단일 규범 전제",
+        "category": "MULTI",
+        "risk": "NORMATIVITY",
+        "severity": "CAUTION",
+        "examples": [
+          "4인 가족 기본 구성",
+          "엄마가 차려주는 밥상",
+          "남녀 커플만 등장",
+          "살색"
+        ],
+        "agent_instruction": "특정 형태만을 기본값으로 전제하는 표현·연출을 탐지한다. 명시적 비하가 없어 놓치기 쉬우나 배제 효과가 크다."
+      },
+      {
+        "id": "PATTERN-COMBINATION-001",
+        "pattern": "무해 요소의 위험한 결합",
+        "category": "COMBINATION",
+        "risk": "COMBINATION_RISK",
+        "severity": "HIGH",
+        "examples": [
+          "평범한 손동작 + 특정 각도 = 커뮤니티 상징",
+          "무해한 카피 + 특정 이미지 = 성적 의미",
+          "일반 숫자 + 특정 배치 = 극단주의 코드"
+        ],
+        "agent_instruction": "개별 요소가 모두 LOW여도 결합 의미를 별도로 판정한다. 실제 브랜드 사고의 상당수가 이 유형이다."
+      },
+      {
+        "id": "PATTERN-EVASION-001",
+        "pattern": "은닉 신호 탐지",
+        "category": "MULTI",
+        "risk": "EVASION",
+        "severity": "HIGH",
+        "examples": [
+          "문장 첫 글자 세로읽기",
+          "강조된 글자만 이어읽기",
+          "제품 코드 내 숫자 조합",
+          "배경 소품 속 텍스트"
+        ],
+        "agent_instruction": "디자인 요소에 의도적으로 은닉된 메시지를 검사한다. 세로읽기(아크로스틱), 색상으로 강조된 글자, 반복 등장하는 숫자를 확인한다."
+      },
+      {
+        "id": "PATTERN-DATE-001",
+        "pattern": "게시 시점 + 사회적 맥락 충돌",
+        "category": "SOCIAL_DISASTER",
+        "risk": "TIMING_RISK",
+        "severity": "CRITICAL",
+        "examples": [
+          "참사 기일 당일 축하성 게시물",
+          "추모 기간 중 할인 이벤트",
+          "재난 발생 직후 유흥성 콘텐츠"
+        ],
+        "agent_instruction": "콘텐츠 자체는 무해해도 게시 시점이 사회적 추모·애도 기간과 겹치면 CRITICAL로 판정한다. 게시 예정일을 반드시 확인하고, 주요 추모일(4·16, 5·18, 10·29 등)과 최근 발생 재난을 대조한다."
+      }
+    ]
+  },
+  "07_severity_mapping": {
+    "note": "단어 사전은 LOW/CAUTION/HIGH/CRITICAL, 리포트 UI는 안전/주의/위험/미검증을 쓴다.",
+    "map": {
+      "CRITICAL": "위험 (high, 85~100, 배포 보류)",
+      "HIGH": "위험 (high, 70~84)",
+      "CAUTION": "주의 (caution, 40~69)",
+      "LOW": "안전 (safe, 0~39)",
+      "UNVERIFIED": "미검증"
+    },
+    "rules": [
+      "종합 판정은 개별 항목 중 최고 위험도를 따른다. 평균이 아니다.",
+      "LEGAL / SOCIAL / BRAND 세 차원 중 가장 높은 값이 그 항목의 등급이다.",
+      "외부 검증 없이 '위험 없음'은 '확인하지 못함'과 다르다. 후자는 미검증으로 표시한다.",
+      "CONFIDENCE가 LOW인 항목은 안전으로 판정하지 않는다."
+    ]
+  },
+  "08_review_criteria": {
+    "common": {
+      "title": "ContentGuard 검수 공통 원리",
+      "version": "1.0",
+      "updated": "2026-10-17",
+      "purpose": "모든 검수 항목에 공통으로 적용되는 추론 원리. 개별 항목 규정보다 먼저 적용한다.",
+      "core_stance": [
+        "검수의 질문은 '이 콘텐츠가 규정을 위반했는가'가 아니라 '악의적이거나 예민한 수용자가 이 콘텐츠를 어떻게 읽을 수 있는가'이다.",
+        "제작 의도는 면책 사유가 아니다. 의도가 선했더라도 수용자에게 나쁘게 읽힐 개연성이 있으면 리스크로 판정한다.",
+        "알려진 규정·사례와의 대조(RAG)는 판정 근거 확보용이며, 탐지는 대조 범위에 갇히지 않고 적대적 재해석으로 확장한다.",
+        "반대로, 억지 해석으로 모든 콘텐츠를 위험으로 만드는 것은 실패다. 모든 위험 해석에는 개연성 점수와 근거를 붙인다."
+      ],
+      "pipeline": [
+        {
+          "step": "1. 분해(Decompose)",
+          "desc": "모든 입력을 텍스트화한다. 이미지는 OCR로 모든 글자를 추출하고 각 글자 덩어리의 위치·크기·색·방향·폰트를 기록한다. 글자가 아닌 시각 요소(인물, 손 모양, 제스처, 색 조합, 상징물, 숫자 배치, 로고)도 객체 단위로 서술한다. 영상은 키프레임과 자막·음성 전사를 포함한다."
+        },
+        {
+          "step": "2. 재조합(Recombine)",
+          "desc": "추출한 요소를 다양한 방식으로 다시 읽는다: 세로 읽기, 각 줄 첫 글자/마지막 글자, 초성만, 역순, 띄어쓰기 변경, 강조(색·굵기)된 글자만 모아 읽기, 숫자·날짜·시간 조합, 영문 대소문자·로마자 변환, 동음이의어·발음 유사어 치환, 이모지·특수문자 치환, 텍스트+이미지 결합 의미."
+        },
+        {
+          "step": "3. 적대적 재해석(Red-team reading)",
+          "desc": "다음 관점에서 각각 최악의 해석을 생성한다: (a) 특정 커뮤니티 이용자, (b) 해당 표현으로 상처받을 수 있는 당사자 집단, (c) 브랜드를 공격하려는 안티·경쟁사, (d) 규제기관·법무 담당자, (e) 기자. 각 해석은 '누가, 어떤 근거로, 어떻게 읽는가'를 한 문장으로 기술한다."
+        },
+        {
+          "step": "4. 개연성 평가(Plausibility)",
+          "desc": "각 해석에 0~100 개연성 점수를 부여한다. 근거: 실제 용례 존재 여부(커뮤니티·SNS·뉴스), 우연으로 보기 어려운 정도(여러 신호의 중첩), 노출 위치의 두드러짐, 게시 시점·채널·타깃. 신호가 하나뿐이고 용례가 없으면 낮게, 두 개 이상 신호가 겹치거나 실제 논란 사례가 있으면 높게 준다."
+        },
+        {
+          "step": "5. 판정(Judge)",
+          "desc": "항목별 규정에 따라 등급을 매긴다. 등급은 가장 개연성 높은 위험 해석 기준으로 정하고, 개연성이 낮은 해석은 '참고'로만 기록한다."
+        },
+        {
+          "step": "6. 대안 제시(Remedy)",
+          "desc": "위험·주의 판정에는 수정 대안을 제시한다: 톤 유지형 / 안전 우선형 / 간결형. 대안도 동일 파이프라인으로 재검수해 새 리스크가 없는지 확인한다."
+        }
+      ],
+      "severity_scale": {
+        "high": {
+          "label": "위험",
+          "score": "70~100",
+          "meaning": "게시 시 법 위반 또는 공개 논란 개연성이 높음. 배포 보류 권고."
+        },
+        "caution": {
+          "label": "주의",
+          "score": "40~69",
+          "meaning": "맥락·수용자에 따라 문제될 수 있음. 수정 권장 또는 법무·브랜드 담당 확인."
+        },
+        "unverified": {
+          "label": "미검증",
+          "score": "-",
+          "meaning": "판단에 필요한 근거(규정 청크, 고지 원문, 권리 확인 등)가 없어 확정 불가. 담당자 확인 필요."
+        },
+        "safe": {
+          "label": "안전",
+          "score": "0~39",
+          "meaning": "합리적 해석 범위에서 리스크 낮음."
+        }
+      },
+      "aggregation": "종합 판정은 개별 항목 중 최고 위험도를 따른다. 평균은 참고 지표.",
+      "context_inputs": [
+        "콘텐츠 유형(naming/text/image)",
+        "캠페인명·기획서 요지",
+        "게시 예정일",
+        "게시 채널(TV/SNS/옥외/앱푸시/웹)",
+        "타깃 연령·세그먼트"
+      ],
+      "channel_weights": {
+        "SNS": "확산·밈화 속도가 빨라 표현 리스크 1단계 가중 고려",
+        "TV": "불특정 다수·청소년 노출, 방송광고 심의 적용",
+        "OOH": "맥락 없이 단독 노출되므로 오독 리스크 가중",
+        "APP_PUSH": "짧은 문구라 고지 누락 리스크 가중",
+        "WEB": "상세 고지는 가능하나 다크패턴 점검 필요"
+      },
+      "output_schema": {
+        "sub_code": "string",
+        "verdict": "high|caution|unverified|safe",
+        "score": "0-100",
+        "trigger_span": "문제 문구/요소 원문 또는 이미지 내 위치",
+        "readings": [
+          {
+            "perspective": "string",
+            "interpretation": "string",
+            "plausibility": "0-100",
+            "evidence": "string"
+          }
+        ],
+        "rationale": "판정 근거 요약",
+        "cited_chunks": [
+          "chunk_id"
+        ],
+        "alternatives": [
+          {
+            "type": "톤 유지|안전 우선|간결",
+            "text": "string"
+          }
+        ]
+      },
+      "global_rules": [
+        "법령 조항 번호·제재 금액 등 구체 수치는 RAG로 확보한 근거 청크에서만 인용한다. 근거가 없으면 '규정 근거 미확보'로 표기하고 추측하지 않는다.",
+        "실존 인물·기업·사건을 언급할 때 사실 여부가 불확실하면 단정하지 않는다.",
+        "판정 문장은 브랜드 담당자가 바로 이해할 수 있게 쓴다. 왜 문제인지(누가 어떻게 읽는지)를 먼저 쓴다.",
+        "자사(LG U+) 콘텐츠라는 점을 고려해 경쟁사·규제기관이 문제삼을 수 있는 지점을 보수적으로 본다."
+      ],
+      "verify_note": "법령의 시행일·개정 여부·조항 번호는 적재 전 국가법령정보센터(law.go.kr)와 소관 기관 고시로 확인할 것. 이 문서의 '확인할 법령·지침'은 어디를 찾아봐야 하는지에 대한 안내이며 조문 원문이 아니다."
+    },
+    "criteria": [
+      {
+        "code": "HATE",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "혐오 표현",
+        "name_en": "Hate",
+        "summary": "성별·세대·인종·지역·종교·장애·성적지향 등 특정 집단 전체를 비하·조롱·멸칭하는 표현",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "집단 전체를 열등·불결·위험한 존재로 묘사하거나 동물·벌레·질병에 빗대는 멸칭은 맥락·톤과 무관하게 단독 위험이다.",
+          "유머·풍자·자조 형식이어도 멸칭이 노출되면 위험이다. '우리끼리 쓰는 말'은 브랜드 카피에서 통하지 않는다.",
+          "성별 대립 어휘는 한국에서 가장 빠르게 불매·논란으로 번지는 영역이다. 멸칭은 물론, 대립 구도를 연상시키는 표현도 점검한다.",
+          "'~충', '~녀/~남' 접미 결합 신조어는 대부분 멸칭 패턴이므로, 처음 보는 신조어라도 구조로 판단한다."
+        ],
+        "checks": [
+          "특정 집단을 지칭하는 단어가 있는가? 그 단어가 멸칭·비하 어휘인가?",
+          "집단을 동물·벌레·질병·오물에 빗대는가?",
+          "집단 전체에 부정적 속성을 일반화하는가?",
+          "실제 커뮤니티에서 혐오 표현으로 쓰인 용례가 있는가(Grok·Naver 교차)?"
+        ],
+        "hidden_variants": [
+          "초성·자모 분리, 특수문자 삽입, 띄어쓰기 쪼개기",
+          "동음이의어·발음 유사어로 치환한 멸칭",
+          "이미지 속 작은 글씨·배경 간판·소품 텍스트",
+          "여러 줄 카피의 첫 글자를 이으면 멸칭이 되는 구조"
+        ],
+        "examples": {
+          "risk": [
+            "이거 모르면 한남충 인증",
+            "맘충 출입 금지 같은 요금제",
+            "틀딱도 쓰는 쉬운 앱"
+          ],
+          "safe": [
+            "부모님도 쉽게 쓰는 앱",
+            "육아 중인 가족을 위한 요금제"
+          ]
+        },
+        "exceptions": [
+          "혐오 표현을 비판·고발하는 공익 캠페인에서 인용과 비판 맥락이 명확한 경우(그래도 주의 이상으로 두고 법무·브랜드 확인)"
+        ],
+        "severity_rules": {
+          "high": "멸칭·비하 어휘 직접 노출, 또는 은닉 변형이라도 의도가 명백한 경우",
+          "caution": "대립 구도를 연상시키나 멸칭은 없는 경우, 은닉 신호가 1개이고 용례가 약한 경우",
+          "safe": "집단 언급이 중립적·긍정적이고 재해석 개연성 낮음"
+        },
+        "legal_basis": [
+          "국가인권위원회 혐오표현 관련 결정·보고서",
+          "방송통신심의위원회 광고심의 규정(차별·비하 금지 취지)",
+          "정보통신망법(불법정보·명예훼손)"
+        ],
+        "notes": [
+          "멸칭 사전은 internal 레이어(사내 금칙어 사전)로 별도 관리하고 주기적으로 업데이트"
+        ]
+      },
+      {
+        "code": "DISCRIMINATION",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "차별(성·연령·지역)",
+        "name_en": "Discrimination",
+        "summary": "성·연령·지역·출신을 이유로 열등하게 묘사하거나 배제를 정당화하는 표현",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "멸칭이 없어도 특정 집단을 무능·뒤처짐·부적합으로 묘사하면 차별이다(예: 노인=기술 무지, 지방=낙후).",
+          "혜택·대상에서 특정 집단을 합리적 이유 없이 배제하는 문구도 점검한다.",
+          "비교 구조(A는 되는데 B는 안 된다)가 집단 간 우열로 읽히는지 본다."
+        ],
+        "checks": [
+          "특정 성별·연령·지역이 부정적 속성과 결합되는가?",
+          "해당 집단을 웃음거리·반면교사로 쓰는가?",
+          "배제 문구에 합리적 근거(법정 연령 제한 등)가 있는가?"
+        ],
+        "hidden_variants": [
+          "직접 지칭 없이 사투리·말투·외형 묘사로 집단을 특정",
+          "이미지에서 특정 연령·성별만 실수하는 장면 구성"
+        ],
+        "examples": {
+          "risk": [
+            "어르신도 이해하는 쉬운 요금제? 이제 그만 물어보세요",
+            "시골에서도 터진다니까요(놀라는 톤)"
+          ],
+          "safe": [
+            "누구나 쉽게 쓰는 요금제",
+            "전국 어디서나 쓰는 5G(근거 있을 때)"
+          ]
+        },
+        "exceptions": [
+          "법정 연령 요건 고지",
+          "청년·시니어 전용 요금제처럼 혜택 대상을 정한 상품명(비하가 없을 때)"
+        ],
+        "severity_rules": {
+          "high": "집단을 열등하게 묘사하는 문구가 핵심 메시지에 있음",
+          "caution": "은근한 우열 비교, 장면 구성상 특정 집단만 부정적으로 묘사",
+          "safe": "대상 특정이 혜택 목적이고 비하 없음"
+        },
+        "legal_basis": [
+          "국가인권위원회법(차별행위 정의)",
+          "방송통신심의위원회 광고심의 규정"
+        ],
+        "notes": []
+      },
+      {
+        "code": "PROFANITY",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "비속어·은어",
+        "name_en": "Profanity",
+        "summary": "욕설·비속어·저속한 은어 및 이를 우회한 변형 표기",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "욕설의 변형 표기(자모 분리, 숫자·영문 치환, 유사 발음)도 원형과 동일하게 본다.",
+          "'존맛', '개이득'처럼 일상화된 강조 접두어는 채널·타깃에 따라 주의로 판단한다(청소년 노출, TV는 상향).",
+          "은어는 출처 커뮤니티의 성격까지 본다. 무해해 보여도 혐오 커뮤니티 출신 은어면 COMMUNITY_SIGNAL로 연계한다."
+        ],
+        "checks": [
+          "욕설 원형 또는 변형이 있는가?",
+          "강조 접두어(개-, 존-, 졸-)가 있는가? 채널·타깃은?",
+          "은어의 출처와 원래 의미는?"
+        ],
+        "hidden_variants": [
+          "자모·숫자 치환 욕설",
+          "영문 발음 치환",
+          "이미지 속 의성어·말풍선에 숨긴 욕설"
+        ],
+        "examples": {
+          "risk": [
+            "이 가격 실화냐 개미쳤다",
+            "존나 빠른 5G"
+          ],
+          "safe": [
+            "이 가격 실화?",
+            "놀랍도록 빠른 5G"
+          ]
+        },
+        "exceptions": [
+          "상품 고유명사가 우연히 비속어와 발음이 겹치는 경우(개연성 낮으면 참고만)"
+        ],
+        "severity_rules": {
+          "high": "욕설 원형·명백한 변형",
+          "caution": "강조 접두어·저속 은어, 청소년 타깃 또는 TV 채널",
+          "safe": "일상 구어체 수준"
+        },
+        "legal_basis": [
+          "방송통신심의위원회 광고심의 규정(품위 유지)",
+          "청소년보호법"
+        ],
+        "notes": []
+      },
+      {
+        "code": "SOCIAL_ISSUE",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "사회이슈 연관성",
+        "name_en": "Social Issue",
+        "summary": "정치·젠더·이념·노동·환경 등 민감한 사회 담론과 충돌하거나 한쪽 편으로 읽힐 가능성",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "브랜드가 사회 갈등에서 편을 드는 것으로 읽히는 순간 반대편 전체의 불매 대상이 된다. 중립을 기본값으로 본다.",
+          "현재 진행 중인 이슈(파업, 사고, 재판, 젠더 논쟁)의 핵심 키워드·상징과 겹치는지 최근 뉴스·SNS로 확인한다.",
+          "문구 자체가 무해해도 최근 사건과 겹치면 조롱·무신경으로 읽힐 수 있다."
+        ],
+        "checks": [
+          "최근 30일 내 사회 이슈 핵심 키워드와 겹치는가(Naver·Grok)?",
+          "특정 진영의 구호·슬로건·상징과 유사한가?",
+          "갈등 당사자 한쪽을 희화화하는가?"
+        ],
+        "hidden_variants": [
+          "진영 구호 일부를 패러디한 카피",
+          "특정 시위·운동의 상징색·상징물 조합"
+        ],
+        "examples": {
+          "risk": [
+            "(대규모 통신 장애 직후) 끊김 없는 연결, 믿으셔도 됩니다"
+          ],
+          "safe": [
+            "(평시) 끊김 없는 연결"
+          ]
+        },
+        "exceptions": [
+          "사회적 합의가 넓은 가치(안전, 자원순환 등)를 다루는 공익 캠페인"
+        ],
+        "severity_rules": {
+          "high": "진행 중 이슈를 직접 희화화하거나 진영 구호를 차용",
+          "caution": "간접적으로 이슈와 겹치는 단어·시점",
+          "safe": "이슈와 무관"
+        },
+        "legal_basis": [
+          "Naver 뉴스·Grok SNS 실시간 신호(외부 근거)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "COMMUNITY_SIGNAL",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "커뮤니티 신호",
+        "name_en": "Community Signal",
+        "summary": "특정 커뮤니티의 말투·상징·밈·숫자·손동작 등 혐오·조롱 코드 차용",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "가장 탐지가 어렵고 사고가 큰 항목이다. 개별 요소는 무해하지만 커뮤니티 내부에서 특정 인물·집단 조롱 코드로 쓰이는 경우를 잡는다.",
+          "판단 기준은 '그 커뮤니티 이용자가 보면 알아보는가'이다. 일반인이 모르는 코드라도 아는 사람이 캡처해 퍼뜨리면 논란이 된다.",
+          "단일 신호(손가락 모양 하나 등)는 우연일 수 있으므로 개연성을 낮게 시작하되, 신호가 겹치거나 해당 코드로 실제 논란 사례가 있으면 크게 올린다.",
+          "과거 국내 광고·게임 업계의 손가락 모양 논란처럼, 의도와 무관하게 논란 자체가 브랜드 피해가 된다. 의심 신호는 낮은 개연성이라도 리포트에 기록한다."
+        ],
+        "checks": [
+          "특정 커뮤니티 고유 어미·말투·줄임말이 있는가?",
+          "손 모양·제스처·포즈가 알려진 조롱 코드와 유사한가?",
+          "숫자·날짜 조합이 특정 인물·사건 조롱 코드와 일치하는가?",
+          "캐릭터·이모지·색 조합이 특정 커뮤니티 상징과 일치하는가?",
+          "Grok에서 해당 요소+브랜드 키워드로 논란 신호가 있는가?"
+        ],
+        "hidden_variants": [
+          "커뮤니티 고유 어미를 자연스러운 카피 톤으로 위장",
+          "이미지 속 인물의 손가락 모양, 배경 소품, 시계·가격표 숫자",
+          "영상 특정 프레임에만 등장하는 짧은 컷",
+          "폰트·색 강조로 일부 글자만 튀게 해서 다른 단어 형성"
+        ],
+        "examples": {
+          "risk": [
+            "(커뮤니티 고유 어미를 차용한 카피)",
+            "(엄지·검지로 집는 모양이 클로즈업된 손 이미지)"
+          ],
+          "safe": [
+            "일반 구어체 카피",
+            "자연스러운 제스처로 알려진 코드와 무관한 손 이미지"
+          ]
+        },
+        "exceptions": [
+          "대중화되어 커뮤니티 출처가 희석된 밈(최근 재점화 여부는 확인)"
+        ],
+        "severity_rules": {
+          "high": "알려진 조롱 코드와 명확히 일치하거나 신호 2개 이상 중첩",
+          "caution": "단일 신호이나 알려진 코드와 유사, 또는 실제 논란 사례 있음",
+          "safe": "유사성 낮음, 용례 없음"
+        },
+        "legal_basis": [
+          "과거 광고·콘텐츠 논란 및 사과 사례(case 레이어)",
+          "Grok SNS 실시간 신호"
+        ],
+        "notes": [
+          "코드 사전은 internal 레이어로 관리하고 최근 6개월 신규 코드를 주기적으로 반영",
+          "오탐 시 '의도 없음' 소명용 근거를 함께 남긴다"
+        ]
+      },
+      {
+        "code": "MINOR",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "미성년 묘사",
+        "name_en": "Minor",
+        "summary": "미성년자가 등장하거나 미성년을 대상으로 한 콘텐츠의 적절성",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "미성년자를 성적으로 대상화하거나 성인 맥락(연애·음주·외모 평가)에 배치하면 즉시 위험이다.",
+          "미성년 대상 광고는 과도한 구매 유도, 보호자 동의 없는 결제·가입 유도를 점검한다.",
+          "미성년자 얼굴 노출은 법정대리인 동의가 필요하므로 PRIVACY·COPYRIGHT와 연계한다."
+        ],
+        "checks": [
+          "미성년자로 보이는 인물이 등장하는가?",
+          "성인 맥락(연애, 음주, 외모 평가, 노출)에 배치되는가?",
+          "미성년자에게 직접 구매·가입을 유도하는가?",
+          "법정대리인 동의 근거가 있는가?"
+        ],
+        "hidden_variants": [
+          "교복·책가방 등 소품으로 미성년 암시",
+          "나이 대신 학년·학교로 표현"
+        ],
+        "examples": {
+          "risk": [
+            "교복 입은 모델 + 연애 암시 카피",
+            "지금 바로 가입! 부모님 몰라도 OK"
+          ],
+          "safe": [
+            "청소년 요금제, 보호자와 함께 가입하세요"
+          ]
+        },
+        "exceptions": [
+          "가족·교육 맥락의 자연스러운 등장(동의 확보 시)"
+        ],
+        "severity_rules": {
+          "high": "성적 대상화·성인 맥락 배치, 보호자 우회 유도",
+          "caution": "동의 근거 불명확, 과도한 구매 유도",
+          "safe": "적절한 맥락과 동의"
+        },
+        "legal_basis": [
+          "청소년보호법",
+          "개인정보보호법(14세 미만 법정대리인 동의)",
+          "방송통신심의위원회 광고심의 규정(어린이·청소년 보호)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "STEREOTYPE",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "고정관념 묘사",
+        "name_en": "Stereotype",
+        "summary": "성 역할·세대·직업·지역 고정관념을 재생산하는 묘사",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "비하가 없어도 '엄마는 살림, 아빠는 돈', '여성은 기계치', '노인은 디지털 약자'처럼 역할을 고정하는 장면은 주의 대상이다.",
+          "가족·직장 장면에서 누가 무엇을 하는지(역할 배분)를 이미지·카피 양쪽으로 본다.",
+          "타깃 세그먼트가 그 고정관념의 당사자일 때 반발이 가장 크다."
+        ],
+        "checks": [
+          "성별·세대에 따라 역할이 고정 배분되는가?",
+          "특정 집단만 무능·실수 역할인가?",
+          "성별을 바꿔도 자연스러운가(교체 테스트)?"
+        ],
+        "hidden_variants": [
+          "이미지 역할 배분(누가 요리, 누가 설명)",
+          "내레이션 성별과 권위 역할 배분"
+        ],
+        "examples": {
+          "risk": [
+            "엄마도 쉽게! 복잡한 건 아빠가 알아서",
+            "주부를 위한 쉬운 요금제"
+          ],
+          "safe": [
+            "가족 누구나 쉽게 관리하는 요금제"
+          ]
+        },
+        "exceptions": [
+          "데이터 기반 타깃 소구로 비하·역할 고정이 없는 경우"
+        ],
+        "severity_rules": {
+          "high": "역할 고정이 핵심 메시지이고 당사자 비하로 읽힘",
+          "caution": "장면 구성상 역할 고정이 보이나 메시지 중심은 아님",
+          "safe": "역할 배분 중립"
+        },
+        "legal_basis": [
+          "양성평등기본법(대중매체 성차별 개선 취지)",
+          "방송통신심의위원회 광고심의 규정"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DISABILITY_SLUR",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "장애 비하 관용어",
+        "name_en": "Disability Slur",
+        "summary": "장애를 부정적 비유로 쓰는 관용어",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "'결정장애', '선택장애', '분노조절장애', '벙어리 장갑', '벙어리 냉가슴', '귀머거리', '절름발이', '눈뜬 장님', '정신병 걸릴 듯' 등은 일상어처럼 쓰여도 장애를 결함의 비유로 쓰는 표현이다.",
+          "브랜드 카피에서는 의도와 무관하게 장애인 단체·언론 지적 대상이 되고 실제 정정 사례가 많다. 발견 시 기본 위험.",
+          "'~장애'를 단순 '어려움' 의미로 쓰는 조어 패턴 자체를 탐지한다."
+        ],
+        "checks": [
+          "'~장애'를 비유로 쓰는가?",
+          "감각·신체·정신 장애 명칭을 부정적 비유로 쓰는가?",
+          "대체 표현이 가능한가?"
+        ],
+        "hidden_variants": [
+          "띄어쓰기 변형, 초성 표기",
+          "해시태그 속 관용어"
+        ],
+        "examples": {
+          "risk": [
+            "결정장애 고객님을 위한 추천 요금제",
+            "요금제 고르다 정신병 걸릴 뻔"
+          ],
+          "safe": [
+            "고르기 어려운 고객님을 위한 추천 요금제"
+          ]
+        },
+        "exceptions": [
+          "장애인 서비스·접근성 안내에서 장애를 정확한 의미로 쓰는 경우"
+        ],
+        "severity_rules": {
+          "high": "장애 비하 관용어 직접 사용",
+          "caution": "유사 조어 패턴, 맥락상 비유 가능성",
+          "safe": "정확한 의미로 사용"
+        },
+        "legal_basis": [
+          "장애인차별금지 및 권리구제 등에 관한 법률",
+          "국가인권위원회 장애 비하 표현 개선 권고"
+        ],
+        "notes": []
+      },
+      {
+        "code": "APPEARANCE_STATUS",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "외모·직업·학력 비하",
+        "name_en": "Appearance & Status",
+        "summary": "외모·체형·직업·학력·경제력을 열등하게 묘사하거나 조롱",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "외모 평가(체형, 외모, 탈모 등)를 웃음 포인트로 쓰거나 외모·학력을 서열화하면 주의 이상.",
+          "특정 직업을 실패의 상징으로 쓰면 해당 직업군 반발을 부른다.",
+          "가난·빈곤 희화화는 통신비 부담 이슈와 맞물려 역풍이 크다."
+        ],
+        "checks": [
+          "외모·체형을 평가·조롱하는가?",
+          "직업·학력을 서열화하는가?",
+          "가난을 희화화하는가?"
+        ],
+        "hidden_variants": [
+          "비포·애프터 구도 이미지",
+          "특정 직업 유니폼 인물을 실패 역할로 배치"
+        ],
+        "examples": {
+          "risk": [
+            "이 요금제 안 쓰면 거지",
+            "얼굴은 못 바꿔도 요금은 바꿀 수 있다"
+          ],
+          "safe": [
+            "통신비 부담을 덜어주는 요금제"
+          ]
+        },
+        "exceptions": [
+          "자조적 브랜드 톤이라도 타인 집단을 겨냥하면 예외 아님"
+        ],
+        "severity_rules": {
+          "high": "명시적 조롱·서열화",
+          "caution": "은근한 외모·경제력 비교",
+          "safe": "해당 없음"
+        },
+        "legal_basis": [
+          "방송통신심의위원회 광고심의 규정"
+        ],
+        "notes": []
+      },
+      {
+        "code": "POLITICAL_RELIGIOUS",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "정치·종교 연상",
+        "name_en": "Political & Religious",
+        "summary": "정당·정치인·이념·종교를 연상시키는 색·숫자·상징·구호",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "정당 상징색 단독 사용은 문제가 아니지만, 색 + 기호 번호 + 구호 유사 문구가 겹치면 정치 연상으로 읽힌다.",
+          "정치인 이름·별명·발언 패러디, 정치 사건 날짜 숫자는 위험하다. 특정 정치인 비하 코드(커뮤니티 은어·숫자)는 COMMUNITY_SIGNAL과 함께 위험.",
+          "종교 상징·경전 구절·종교 행위의 상업적 희화화는 신자 반발을 부른다."
+        ],
+        "checks": [
+          "정당 색 + 번호 + 구호 유사성이 겹치는가?",
+          "정치인·정치 사건 연상 요소가 있는가?",
+          "종교 상징·행위를 희화화하는가?"
+        ],
+        "hidden_variants": [
+          "숫자 조합(기호 번호, 사건 날짜)",
+          "정치인 발언 패러디",
+          "이미지 배경 현수막"
+        ],
+        "examples": {
+          "risk": [
+            "(선거 기간) 2번이면 충분합니다 + 특정 정당색",
+            "기도하면 데이터가 터집니다"
+          ],
+          "safe": [
+            "두 번째 회선 무료"
+          ]
+        },
+        "exceptions": [
+          "종교 시설 대상 B2B 안내 등 정보 전달 목적"
+        ],
+        "severity_rules": {
+          "high": "정치인·사건 비하 코드, 종교 희화화",
+          "caution": "색·숫자 단일 일치",
+          "safe": "무관"
+        },
+        "legal_basis": [
+          "공직선거법(선거기간 광고)",
+          "방송통신심의위원회 광고심의 규정(정치·종교 중립)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "UNSAFE_BEHAVIOR",
+        "group": "EXPRESSION_RISK",
+        "group_name_ko": "표현 리스크",
+        "name_ko": "위험행동 조장",
+        "name_en": "Unsafe Behavior",
+        "summary": "운전 중 휴대폰 사용, 음주, 도박, 위험한 챌린지 등의 미화·조장",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "통신사 광고에서 가장 흔한 사고는 운전 중 스마트폰 조작 장면이다. 운전석 인물이 화면을 보거나 조작하면 위험.",
+          "보행 중 스마트폰, 위험 장소 셀카, 과음 장면도 미화되면 주의 이상.",
+          "도박 연상(잭팟·올인·베팅)은 이벤트 경품 표현에서 자주 나온다."
+        ],
+        "checks": [
+          "운전석 인물이 기기를 조작하는가?",
+          "음주·도박·위험 장소 행동이 긍정적으로 그려지는가?",
+          "청소년 노출 채널인가?"
+        ],
+        "hidden_variants": [
+          "차량 내부 배경의 작은 손 동작",
+          "'잭팟', '올인', '배팅' 등 도박 어휘"
+        ],
+        "examples": {
+          "risk": [
+            "운전하면서도 끊김 없는 영상 시청",
+            "잭팟 터지는 데이터 이벤트"
+          ],
+          "safe": [
+            "(정차 상태·조수석) 이동 중에도 끊김 없는 영상"
+          ]
+        },
+        "exceptions": [
+          "내비게이션·핸즈프리 등 허용되는 사용 묘사"
+        ],
+        "severity_rules": {
+          "high": "운전 중 조작 장면, 도박 직접 미화",
+          "caution": "도박 어휘 차용, 위험 장소 연출",
+          "safe": "안전 수칙 준수 장면"
+        },
+        "legal_basis": [
+          "도로교통법(운전 중 휴대전화 사용 금지)",
+          "방송통신심의위원회 광고심의 규정",
+          "사행행위 관련 규정"
+        ],
+        "notes": []
+      },
+      {
+        "code": "AD_LAW",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "표시광고법",
+        "name_en": "Advertising Law",
+        "summary": "최상급·절대 표현, 객관적 근거 없는 성능·효능 주장, 기만적 표시",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "표시광고법은 거짓·과장, 기만, 부당 비교, 비방 광고를 금지한다. 판단 기준은 '보통의 주의력을 가진 일반 소비자가 받는 전체적 인상'이다.",
+          "'최고·최초·유일·1위·No.1·가장·100%·완벽' 등은 객관적·최신 근거(출처, 조사 기관, 시점, 범위)가 함께 표시되지 않으면 과장이다.",
+          "광고 주장은 광고 사업자가 실증할 책임이 있다. 실증 자료가 확인되지 않으면 '미검증'으로 두고 근거 확인을 요청한다.",
+          "작은 글씨 단서로 큰 글씨의 인상을 뒤집는 구조(본문 '무료', 단서 '조건부')는 기만으로 본다."
+        ],
+        "checks": [
+          "최상급·절대 표현이 있는가? 출처·시점·범위가 같이 표시되는가?",
+          "성능·속도·혜택 수치에 실증 근거가 있는가?",
+          "큰 글씨 인상과 단서 내용이 일치하는가?",
+          "'1위' 주장이라면 조사 주체·기간·부문이 특정되는가?"
+        ],
+        "hidden_variants": [
+          "'사실상 최고', '업계 최강급' 등 우회 최상급",
+          "이미지 속 트로피·왕관·1위 배지",
+          "수치 단위 생략(최대 ~배)"
+        ],
+        "examples": {
+          "risk": [
+            "국내 최고 속도 5G",
+            "고객만족도 1위(출처 없음)",
+            "100% 만족 보장"
+          ],
+          "safe": [
+            "(조사기관·연도 명시) 2026 ○○조사 이동통신 부문 1위"
+          ]
+        },
+        "exceptions": [
+          "근거·출처·시점이 명확히 병기된 수상·인증 표시",
+          "사실 주장으로 읽히지 않는 감성 표현(예: '설레는 연결')"
+        ],
+        "severity_rules": {
+          "high": "근거 없는 최상급·수치 주장이 핵심 메시지",
+          "caution": "근거 표기가 불충분하거나 단서가 지나치게 작음",
+          "safe": "근거 명확 또는 감성 표현"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률(부당 표시·광고 금지, 실증 책임)",
+          "공정거래위원회 표시·광고 심사지침",
+          "공정거래위원회 표시·광고 실증에 관한 운영고시"
+        ],
+        "notes": []
+      },
+      {
+        "code": "PRIVACY",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "개인정보",
+        "name_en": "Privacy",
+        "summary": "이미지·영상 속 식별 가능한 개인정보 노출",
+        "applies_to": [
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "얼굴, 차량번호, 전화번호, 주소, 이름표, 화면 캡처 속 계정·메시지·알림 등 특정 개인을 식별할 수 있는 정보가 동의 없이 노출되면 위험.",
+          "UI 목업·캡처 이미지에 실제 사용자 데이터가 남아있는 경우가 가장 흔한 사고다. OCR 결과 전체를 개인정보 패턴으로 스캔한다.",
+          "배경 행인 얼굴도 식별 가능하면 대상이다."
+        ],
+        "checks": [
+          "OCR 텍스트에 전화번호·이메일·주민번호·주소·차량번호 패턴이 있는가?",
+          "식별 가능한 얼굴이 있는가? 모델 계약·동의 근거는?",
+          "캡처 화면에 실제 계정·대화·알림이 보이는가?"
+        ],
+        "hidden_variants": [
+          "화면 반사, 작은 알림 배너, 배경 간판·명찰",
+          "불완전한 모자이크"
+        ],
+        "examples": {
+          "risk": [
+            "실제 고객 이름과 번호가 보이는 앱 화면 캡처"
+          ],
+          "safe": [
+            "가상 이름·가상 번호(010-0000-0000)로 채운 목업"
+          ]
+        },
+        "exceptions": [
+          "모델·출연자 동의 확보, 비식별 원경 군중"
+        ],
+        "severity_rules": {
+          "high": "실제 개인 식별정보 노출",
+          "caution": "식별 가능성 애매, 동의 여부 불명(미검증 병행)",
+          "safe": "가상 데이터 또는 비식별"
+        },
+        "legal_basis": [
+          "개인정보보호법",
+          "정보통신망법",
+          "위치정보법(위치 화면 노출 시)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DEFAMATION",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "경쟁사 비방",
+        "name_en": "Defamation",
+        "summary": "경쟁사·특정 사업자를 비방하거나 불리하게 묘사",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "경쟁사를 직접 지칭하지 않아도 로고·브랜드 컬러·상징·슬로건 패러디로 특정 가능하면 비방이다.",
+          "사실이라도 경쟁사를 불리하게 보이도록 일부만 부각하면 비방 광고가 될 수 있다.",
+          "통신 3사 구도에서는 대표 색, '다른 통신사', 이니셜(S사·K사)도 특정으로 본다."
+        ],
+        "checks": [
+          "경쟁사를 명칭·이니셜·색·로고·슬로건으로 특정할 수 있는가?",
+          "경쟁사를 열등·불량·기만적으로 묘사하는가?",
+          "주장에 객관적 근거가 있는가?"
+        ],
+        "hidden_variants": [
+          "경쟁사 슬로건 말장난",
+          "경쟁사 대표 색만 실패 장면에 사용"
+        ],
+        "examples": {
+          "risk": [
+            "아직도 S사 쓰세요? 답답하시겠어요"
+          ],
+          "safe": [
+            "U+로 바꾸면 이런 혜택이"
+          ]
+        },
+        "exceptions": [
+          "기준을 충족한 객관적 비교광고(COMPARATIVE_AD에서 판정)"
+        ],
+        "severity_rules": {
+          "high": "특정 가능한 경쟁사를 열등·부정적으로 묘사",
+          "caution": "간접 특정 가능성",
+          "safe": "특정 불가"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률(비방적 표시·광고)",
+          "공정거래위원회 비교표시·광고 심사지침",
+          "형법·정보통신망법(명예훼손, 업무방해)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "COPYRIGHT",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "저작권·초상권",
+        "name_en": "Copyright & Portrait",
+        "summary": "폰트·이미지·BGM·캐릭터·타사 로고·초상의 무단 사용",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "모든 외부 저작물은 라이선스 근거가 있어야 한다. 근거 정보가 입력되지 않았으면 위험으로 단정하지 말고 '미검증'으로 둔다.",
+          "상업용 폰트는 라이선스 범위(인쇄/웹/영상/로고)를 확인하고, 무료 폰트도 상업 사용 범위를 확인한다.",
+          "유명 캐릭터·작품 패러디, 영화 장면 오마주, 유명 사진 구도 모방은 저작권 침해 소지가 있다.",
+          "이미지 속 타사 로고·상품이 의도치 않게 노출되면 상표·협찬 오해가 생긴다."
+        ],
+        "checks": [
+          "폰트·이미지·음원의 출처와 라이선스가 기재되었는가?",
+          "알려진 캐릭터·작품을 연상시키는가?",
+          "타사 로고·상품이 보이는가?",
+          "인물 초상 사용 동의는?"
+        ],
+        "hidden_variants": [
+          "캐릭터 실루엣·색 조합만 바꾼 유사 디자인",
+          "배경 TV·포스터 속 타 작품"
+        ],
+        "examples": {
+          "risk": [
+            "유명 애니 캐릭터를 닮은 마스코트",
+            "배경에 타사 음료 로고"
+          ],
+          "safe": [
+            "자체 제작 캐릭터, 라이선스 확인 폰트"
+          ]
+        },
+        "exceptions": [
+          "자사 보유·구매 라이선스, 퍼블릭 도메인"
+        ],
+        "severity_rules": {
+          "high": "유명 저작물·캐릭터 무단 사용, 타사 로고 전면 노출",
+          "caution": "유사성 있음, 라이선스 정보 없음(미검증 병행)",
+          "safe": "자체 제작·라이선스 확인"
+        },
+        "legal_basis": [
+          "저작권법",
+          "부정경쟁방지법(성과 도용)",
+          "상표법"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DISCLOSURE",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "약관·고지 누락",
+        "name_en": "Disclosure",
+        "summary": "부가세 별도, 약정, 속도 제한, 결합 조건 등 중요 조건의 누락·은폐",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "가격·혜택을 표시할 때 소비자 결정에 영향을 주는 조건은 같은 시야 안에서 알아볼 수 있게 표시해야 한다.",
+          "'월 ○○원'은 부가세 포함 여부, 약정 기간, 할인 적용 기간(프로모션 종료 후 금액), 결합 조건을 확인한다.",
+          "단서의 크기·위치·대비가 본문 대비 현저히 작거나 다른 화면에 있으면 누락과 같게 본다.",
+          "앱푸시·옥외처럼 공간이 좁은 채널은 상세 고지 링크·안내 문구라도 있어야 한다."
+        ],
+        "checks": [
+          "가격 표시에 부가세·약정·기간·결합조건이 있는가?",
+          "단서가 같은 시야에서 읽히는 크기·대비인가?",
+          "프로모션 종료 후 금액이 안내되는가?"
+        ],
+        "hidden_variants": [
+          "단서를 배경색과 비슷한 색으로 처리",
+          "영상에서 단서를 1초 미만 노출"
+        ],
+        "examples": {
+          "risk": [
+            "월 9,900원(단서 없음)",
+            "평생 반값(실제 12개월)"
+          ],
+          "safe": [
+            "월 9,900원(부가세 포함, 24개월 약정, 13개월차부터 19,800원)"
+          ]
+        },
+        "exceptions": [
+          "가격·혜택 주장이 없는 브랜드 이미지 광고"
+        ],
+        "severity_rules": {
+          "high": "중요 조건 누락으로 인상이 크게 달라짐",
+          "caution": "단서가 있으나 지나치게 작거나 분리",
+          "safe": "충분한 고지"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률(기만적 표시·광고, 중요정보 고시)",
+          "전기통신사업법(이용자 이익 저해 금지행위)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "AD_DISCLOSURE",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "광고 표시 고지",
+        "name_en": "Ad Disclosure",
+        "summary": "뒷광고(경제적 이해관계 미표시), 유료광고 표기 누락, 조건부·불확정 표현",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "인플루언서·체험단·제휴 콘텐츠는 경제적 이해관계(대가, 무상 제공, 할인)를 소비자가 쉽게 알 수 있게 표시해야 한다. 위치는 제목·첫 부분이며, 더보기 안에 숨기면 안 된다.",
+          "'협찬', '광고', '유료광고 포함' 등 명확한 한글 표기가 원칙이다. 영문 'sponsored'를 작게 쓰는 것은 불충분할 수 있다.",
+          "'최대', '~까지', '~도 가능' 같은 조건부·불확정 표현은 다수 소비자가 실제 받는 수준과 괴리가 크면 기만이 된다."
+        ],
+        "checks": [
+          "채널이 SNS·인플루언서인가? 경제적 이해관계 표시가 첫 노출 위치에 있는가?",
+          "조건부 표현의 최대치와 통상치 차이는?"
+        ],
+        "hidden_variants": [
+          "해시태그 묶음 맨 끝의 #광고",
+          "영상 끝부분에만 표시"
+        ],
+        "examples": {
+          "risk": [
+            "(인플루언서 게시물) 내돈내산 U+ 후기(실제 협찬)",
+            "최대 50만원 할인(대부분 5만원)"
+          ],
+          "safe": [
+            "[광고] U+에서 제공받아 작성한 후기입니다"
+          ]
+        },
+        "exceptions": [
+          "광고 주체가 명백한 자사 공식 채널의 자사 광고"
+        ],
+        "severity_rules": {
+          "high": "협찬 사실 미표시·은폐",
+          "caution": "표시 위치·크기 미흡, 조건부 표현 괴리",
+          "safe": "적정 표시"
+        },
+        "legal_basis": [
+          "공정거래위원회 추천·보증 등에 관한 표시·광고 심사지침",
+          "표시·광고의 공정화에 관한 법률"
+        ],
+        "notes": [
+          "SNS 채널에서 가중치 상향"
+        ]
+      },
+      {
+        "code": "COMPARATIVE_AD",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "비교광고",
+        "name_en": "Comparative Ad",
+        "summary": "근거 없는 '타사 대비 N배' 등 부당 비교",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "비교광고 자체는 허용되지만, 비교 대상·기준·조건이 같고 객관적 근거가 있어야 한다.",
+          "자사에 유리한 조건만 골라 비교하거나, 비교 시점이 오래됐거나, 비교 대상이 불명확하면 부당 비교다.",
+          "'타사', '기존', '일반' 대비처럼 대상을 흐리면 오히려 오인 소지가 크다."
+        ],
+        "checks": [
+          "비교 대상이 명확한가?",
+          "동일 조건(요금 수준, 지역, 기간, 측정 방식) 비교인가?",
+          "출처·측정 시점이 표시되는가?"
+        ],
+        "hidden_variants": [
+          "그래프 축 왜곡",
+          "'최대 N배'의 단위 생략"
+        ],
+        "examples": {
+          "risk": [
+            "타사 대비 2배 빠른 5G(근거 없음)"
+          ],
+          "safe": [
+            "(측정기관·기간·지역 명시) ○○ 측정 기준 평균 다운로드 속도 비교"
+          ]
+        },
+        "exceptions": [
+          "공인 기관의 동일 조건 측정 결과를 출처와 함께 표시"
+        ],
+        "severity_rules": {
+          "high": "근거 없는 수치 비교",
+          "caution": "비교 조건·출처 불충분",
+          "safe": "객관적 근거·조건 명시"
+        },
+        "legal_basis": [
+          "공정거래위원회 비교표시·광고에 관한 심사지침",
+          "표시·광고의 공정화에 관한 법률"
+        ],
+        "notes": []
+      },
+      {
+        "code": "TRADEMARK_PUBLICITY",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "상표·퍼블리시티권",
+        "name_en": "Trademark & Publicity",
+        "summary": "유명인 이름·얼굴·목소리·별명 무단 사용, 타사 상표 오용",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "유명인의 성명·초상·음성 등 식별표지를 허락 없이 상업적으로 쓰면 부정경쟁방지법상 부정경쟁행위(퍼블리시티권 침해)가 된다.",
+          "이름이 없어도 성대모사, 유행어, 닮은꼴 모델, 별명으로 특정 유명인을 떠올리게 하면 대상이다.",
+          "타사 상표를 자사 상품명·카피에 섞거나 유사하게 쓰면 상표 침해·혼동 유발."
+        ],
+        "checks": [
+          "유명인을 떠올리게 하는 이름·얼굴·목소리·유행어·별명이 있는가?",
+          "계약·허락 근거가 있는가?",
+          "타사 등록상표와 동일·유사한 표현이 있는가?"
+        ],
+        "hidden_variants": [
+          "닮은꼴·성대모사",
+          "유명인 유행어 패러디"
+        ],
+        "examples": {
+          "risk": [
+            "(유명 배우 유행어를 그대로 쓴 카피)"
+          ],
+          "safe": [
+            "계약 모델의 공식 광고"
+          ]
+        },
+        "exceptions": [
+          "계약 모델, 공적 인물에 대한 보도·정보 전달"
+        ],
+        "severity_rules": {
+          "high": "유명인 식별표지 무단 사용, 타사 상표 차용",
+          "caution": "간접 연상",
+          "safe": "무관"
+        },
+        "legal_basis": [
+          "부정경쟁방지 및 영업비밀보호에 관한 법률(타인 성명·초상 등 무단 사용)",
+          "상표법"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DARK_PATTERN",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "다크패턴",
+        "name_en": "Dark Pattern",
+        "summary": "허위 긴급성, 숨은 자동갱신, 해지 방해 등 소비자 선택을 왜곡하는 문구·설계",
+        "applies_to": [
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "사실과 다른 시간·수량 압박('오늘만', '마감 임박', '남은 수량 3개')은 다크패턴이다.",
+          "무료체험 후 유료 자동전환을 충분히 고지하지 않거나, 가입은 쉽고 해지는 어렵게 만드는 문구·UI.",
+          "거절 선택지를 수치심 유발 문구로 만드는 것('아니요, 혜택은 필요 없어요')도 점검한다.",
+          "사전 체크된 유료 옵션, 기본값 동의."
+        ],
+        "checks": [
+          "시간·수량 압박 문구가 있는가? 실제 기한·수량과 일치하는가?",
+          "무료→유료 전환 고지가 명확한가?",
+          "거절 버튼 문구가 수치심을 유발하는가?",
+          "유료 옵션이 기본 선택되어 있는가?"
+        ],
+        "hidden_variants": [
+          "카운트다운 타이머 이미지",
+          "회색 작은 해지 링크"
+        ],
+        "examples": {
+          "risk": [
+            "오늘만 이 가격!(상시 판매)",
+            "아니요, 저는 비싼 요금 낼게요"
+          ],
+          "safe": [
+            "10월 31일까지 이벤트 가격(이후 정상가)",
+            "다음에 할게요"
+          ]
+        },
+        "exceptions": [
+          "실제 기한·수량이 정확한 한정 프로모션"
+        ],
+        "severity_rules": {
+          "high": "허위 긴급성, 자동갱신 은폐",
+          "caution": "수치심 유발 거절 문구, 기본값 선택",
+          "safe": "정확한 기한·선택지"
+        },
+        "legal_basis": [
+          "전자상거래 등에서의 소비자보호에 관한 법률(온라인 다크패턴 규율 개정 조항)",
+          "공정거래위원회 온라인 다크패턴 관련 가이드라인"
+        ],
+        "notes": []
+      },
+      {
+        "code": "GREENWASHING",
+        "group": "COMPLIANCE_RISK",
+        "group_name_ko": "법적·컴플라이언스 리스크",
+        "name_ko": "그린워싱",
+        "name_en": "Greenwashing",
+        "summary": "근거 없는 친환경·탄소중립·재활용 주장",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "'친환경', '탄소중립', '지구를 살리는', '100% 재활용' 등 환경 주장은 범위(제품 전체/일부)·근거(인증·수치)·기준 시점이 있어야 한다.",
+          "일부 공정의 개선을 제품·기업 전체의 친환경으로 일반화하면 기만이다.",
+          "자원순환 캠페인(폐휴대폰 회수 등)은 실제 재활용률·처리 방식과 문구가 일치하는지 확인한다."
+        ],
+        "checks": [
+          "환경 주장이 있는가? 범위·근거·인증이 표시되는가?",
+          "전체로 일반화하는가?",
+          "녹색 이미지·나뭇잎 아이콘만으로 친환경 인상을 주는가?"
+        ],
+        "hidden_variants": [
+          "초록색·자연 이미지만으로 친환경 인상 형성",
+          "자체 제작 '에코' 마크"
+        ],
+        "examples": {
+          "risk": [
+            "지구를 살리는 친환경 요금제",
+            "탄소중립 5G"
+          ],
+          "safe": [
+            "(인증·수치 명시) 회수된 폐휴대폰은 ○○ 인증 업체를 통해 재활용됩니다"
+          ]
+        },
+        "exceptions": [
+          "공인 환경 인증과 수치가 명확히 병기된 경우"
+        ],
+        "severity_rules": {
+          "high": "근거 없는 포괄적 환경 주장",
+          "caution": "부분 근거를 과도하게 일반화",
+          "safe": "근거·범위 명확"
+        },
+        "legal_basis": [
+          "공정거래위원회 환경 관련 표시·광고에 관한 심사지침",
+          "환경기술 및 환경산업 지원법(환경성 표시·광고)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "RATE_MATERIAL_NOTICE",
+        "group": "TELECOM_RISK",
+        "group_name_ko": "통신업 특화 리스크",
+        "name_ko": "요금·혜택 중요사항 고지",
+        "name_en": "Rate Material Notice",
+        "summary": "요금·할인·혜택 광고에서 위약금·약정·결합조건 등 중요사항 누락",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "통신서비스 광고는 이용요금, 약정 조건, 위약금(할인반환금), 결합 조건, 할인 적용 기간을 이용자가 오인하지 않게 고지해야 한다. 중요사항 미고지·오인 유발은 전기통신사업법상 이용자 이익 저해 금지행위 유형이다.",
+          "'월 ○원'이 결합·제휴카드·약정 할인을 모두 적용한 최저가라면 적용 조건을 같은 시야에 명시해야 한다.",
+          "'공짜', '0원', '무료'는 실제 총비용(위약금·부가서비스 의무가입 포함)을 기준으로 판단한다."
+        ],
+        "checks": [
+          "표시 요금은 어떤 할인을 모두 적용한 값인가? 조건이 명시되는가?",
+          "약정 기간·위약금 안내가 있는가?",
+          "부가서비스 의무 가입 조건이 있는가?",
+          "할인 기간 종료 후 요금이 안내되는가?"
+        ],
+        "hidden_variants": [
+          "'실납부 0원' 강조, 조건은 작은 별표",
+          "요금제명 자체의 혜택 과장(예: '평생 무료 요금제')"
+        ],
+        "examples": {
+          "risk": [
+            "월 0원 5G(결합·카드·약정 조건 미표기)"
+          ],
+          "safe": [
+            "월 0원*(*가족결합+제휴카드 월 30만원 이상 사용+24개월 약정 시. 미충족 시 월 ○원)"
+          ]
+        },
+        "exceptions": [
+          "요금이 언급되지 않는 브랜드 광고"
+        ],
+        "severity_rules": {
+          "high": "총비용 인상이 실제와 크게 다르게 형성",
+          "caution": "조건 표시가 작거나 분리",
+          "safe": "조건 명확"
+        },
+        "legal_basis": [
+          "전기통신사업법(금지행위: 이용자 이익 저해, 중요사항 미고지)",
+          "전기통신사업법 시행령 금지행위 세부 유형",
+          "표시·광고의 공정화에 관한 법률"
+        ],
+        "notes": []
+      },
+      {
+        "code": "SPEED_QUALITY_CLAIM",
+        "group": "TELECOM_RISK",
+        "group_name_ko": "통신업 특화 리스크",
+        "name_ko": "속도·품질 과장",
+        "name_en": "Speed & Quality Claim",
+        "summary": "이론상 최대 속도를 체감 속도처럼 표현하는 등 품질 과장",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "통신 속도 광고의 핵심 리스크다. 규격상 이론 최대치를 일반 소비자가 체감하는 속도처럼 표현하면 거짓·과장 광고다.",
+          "통신 3사가 5G 속도를 과장 광고해 공정거래위원회 제재를 받은 선례가 있다. 판정 시 case 레이어에서 해당 의결 내용을 찾아 기준점으로 인용한다.",
+          "속도 수치를 쓰려면 '이론상 최대' 여부, 측정 조건(장비, 지역, 기간), 실측 평균의 출처를 함께 표시해야 한다.",
+          "'LTE보다 20배' 같은 배수 표현은 같은 기준끼리 비교라도 체감으로 오인되기 쉬우므로 기본 주의 이상."
+        ],
+        "checks": [
+          "속도 수치·배수가 있는가?",
+          "이론상 최대인지 실측 평균인지 명시되는가?",
+          "측정 조건·출처가 있는가?",
+          "커버리지(전국/일부 지역) 오인 여지가 있는가?"
+        ],
+        "hidden_variants": [
+          "'초고속', '끊김 없는', '어디서나'의 무조건적 표현",
+          "속도계 바늘이 최대인 이미지"
+        ],
+        "examples": {
+          "risk": [
+            "5G 최대 속도 20배",
+            "전국 어디서나 끊김 없는 5G"
+          ],
+          "safe": [
+            "(과기정통부 품질평가 ○○년 기준) 5G 평균 다운로드 ○○Mbps"
+          ]
+        },
+        "exceptions": [
+          "공식 품질평가 결과를 출처·연도와 함께 표시"
+        ],
+        "severity_rules": {
+          "high": "이론상 수치를 체감처럼 표현, 근거 없는 커버리지 주장",
+          "caution": "조건 표기 불충분, 무조건적 품질 표현",
+          "safe": "출처·조건 명확"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률",
+          "공정거래위원회 5G 속도 과장 광고 제재 의결(case)",
+          "과학기술정보통신부 통신서비스 품질평가 결과(실측 근거)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "UNLIMITED_CLAIM",
+        "group": "TELECOM_RISK",
+        "group_name_ko": "통신업 특화 리스크",
+        "name_ko": "\"무제한\" 표현",
+        "name_en": "Unlimited Claim",
+        "summary": "데이터 소진 후 속도제어(QoS) 조건 없이 '무제한' 표현",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "기본 제공량 소진 후 속도를 제한하는 요금제를 '무제한'이라 할 때는 소진 후 제한 속도와 기본 제공량을 반드시 병기한다.",
+          "'완전 무제한', '진짜 무제한'처럼 강조하면서 제한이 있으면 위험.",
+          "테더링·쉐어링 한도, 일 사용량 제한, 공정사용정책(FUP)도 고지 대상."
+        ],
+        "checks": [
+          "'무제한'이라는 단어가 있는가?",
+          "소진 후 속도 제한과 기본 제공량이 표시되는가?",
+          "테더링·일 한도 등 추가 제한이 있는가?"
+        ],
+        "hidden_variants": [
+          "요금제명에 '무제한', 조건은 별도 페이지",
+          "∞ 아이콘만 사용"
+        ],
+        "examples": {
+          "risk": [
+            "데이터 무제한 요금제(QoS 미표기)",
+            "완전 무제한"
+          ],
+          "safe": [
+            "데이터 무제한(기본 ○GB 소진 후 최대 ○Mbps로 계속 사용)"
+          ]
+        },
+        "exceptions": [
+          "실제로 속도 제한이 없는 요금제(근거 확인 필요)"
+        ],
+        "severity_rules": {
+          "high": "제한이 있는데 무조건 무제한을 강조",
+          "caution": "제한 표기가 작거나 분리",
+          "safe": "제한 조건 명확"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률",
+          "전기통신사업법(중요사항 고지)",
+          "공정거래위원회 통신 요금 광고 시정 사례(case)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DEVICE_SUBSIDY",
+        "group": "TELECOM_RISK",
+        "group_name_ko": "통신업 특화 리스크",
+        "name_ko": "단말 지원금·공짜폰",
+        "name_en": "Device Subsidy",
+        "summary": "'공짜폰', '0원폰', 지원금 표현의 오인 유발",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "단말기유통법(단통법)은 폐지됐고 일부 이용자 보호 규정은 전기통신사업법으로 이관됐다. 판정 근거는 폐지된 단통법이 아니라 현행 전기통신사업법 조항이어야 한다(RAG effective_to 필터 필수).",
+          "'공짜폰', '0원'이 고가 요금제 의무 사용, 부가서비스 가입, 약정, 할부원금 분산으로 만들어진 것이면 총비용 기준 오인 유발이다.",
+          "지원금 조건(요금제, 기간, 위약금, 지원금 반환)을 같은 시야에 고지한다."
+        ],
+        "checks": [
+          "'공짜·0원·무료폰' 표현이 있는가?",
+          "실제 총비용(할부원금+의무 요금제 기간)이 고지되는가?",
+          "지원금 조건·반환 규정이 고지되는가?",
+          "판정 근거가 현행법 기준인가?"
+        ],
+        "hidden_variants": [
+          "요금 할인을 기기 할인처럼 표현('기기값 0원')",
+          "할부원금을 요금에 녹인 표현"
+        ],
+        "examples": {
+          "risk": [
+            "갤럭시 공짜로 드립니다(고가 요금제 6개월 의무)"
+          ],
+          "safe": [
+            "(조건 명시) 공시지원금 ○원 + 추가지원금 ○원 적용 시 할부원금 ○원"
+          ]
+        },
+        "exceptions": [
+          "총비용과 조건이 명확한 지원금 안내"
+        ],
+        "severity_rules": {
+          "high": "총비용을 오인시키는 공짜·0원 표현",
+          "caution": "조건 고지 불충분",
+          "safe": "조건 명확"
+        },
+        "legal_basis": [
+          "전기통신사업법(단통법 폐지에 따른 이관 조항)",
+          "단말기유통법 폐지 법률(시행일 확인 후 effective_to 처리)",
+          "표시·광고의 공정화에 관한 법률"
+        ],
+        "notes": [
+          "단통법 근거 청크는 effective_to를 폐지 시행일로 설정"
+        ]
+      },
+      {
+        "code": "BUNDLED_FINANCE",
+        "group": "TELECOM_RISK",
+        "group_name_ko": "통신업 특화 리스크",
+        "name_ko": "제휴카드·금융 결합 할인",
+        "name_en": "Bundled Finance",
+        "summary": "제휴카드 청구할인을 요금 할인처럼 표기",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "제휴카드 할인은 통신사가 요금을 깎아주는 것이 아니라 카드사가 실적 조건 충족 시 청구 할인하는 것이다. 이를 '요금 ○원 할인'처럼 표기하면 오인이다.",
+          "카드 전월 실적 조건, 할인 한도, 연회비를 함께 고지해야 한다.",
+          "금융상품 광고 요소가 포함되면 금융 광고 규제(금융소비자보호법, 여신전문금융업법 관련 광고 기준)도 검토 대상이다."
+        ],
+        "checks": [
+          "카드 할인이 요금 할인처럼 표현되는가?",
+          "전월 실적·한도·연회비가 고지되는가?",
+          "할인 후 금액을 기본 요금처럼 크게 표시하는가?"
+        ],
+        "hidden_variants": [
+          "카드 할인을 요금표 안에 섞어 최저가 표시"
+        ],
+        "examples": {
+          "risk": [
+            "월 요금 2만원 할인!(제휴카드 조건)"
+          ],
+          "safe": [
+            "○○카드 결제 시 전월 실적 30만원 이상이면 월 최대 2만원 청구할인(연회비 별도)"
+          ]
+        },
+        "exceptions": [
+          "카드 혜택임이 명확히 구분된 안내"
+        ],
+        "severity_rules": {
+          "high": "카드 할인을 요금 할인으로 표기, 실적 조건 누락",
+          "caution": "조건 표기 불충분",
+          "safe": "명확히 구분"
+        },
+        "legal_basis": [
+          "표시·광고의 공정화에 관한 법률",
+          "금융소비자 보호에 관한 법률(금융상품 광고)",
+          "여신전문금융업법(신용카드 광고)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "AI_GENERATED_LABEL",
+        "group": "AI_DIGITAL_RISK",
+        "group_name_ko": "AI·디지털 리스크",
+        "name_ko": "AI 생성물 표시",
+        "name_en": "AI Generated Label",
+        "summary": "생성형 AI로 만든 이미지·영상·음성의 표시 의무",
+        "applies_to": [
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "AI기본법(2026년 1월 시행)은 생성형 AI 결과물에 AI로 생성됐다는 사실을 표시하도록 하고, 실제와 구분하기 어려운 결과물은 이용자가 명확히 인식할 수 있게 고지하도록 한다. 세부 표시 방법은 시행령·고시를 RAG로 확인한다.",
+          "AI 생성 여부는 제작자 신고, 워터마크·C2PA 메타데이터, 시각적 단서(손가락·텍스트 왜곡, 비현실 조명)로 추정하되, 추정만으로 단정하지 않고 '확인 필요'를 남긴다.",
+          "실사처럼 보이는 AI 인물·제품 이미지가 표시 필요성이 가장 높다."
+        ],
+        "checks": [
+          "AI 생성 여부가 신고되었는가?",
+          "AI 생성으로 보이는 시각 단서가 있는가?",
+          "AI 생성물이면 표시 문구·워터마크가 있는가?",
+          "실제와 구분하기 어려운 수준인가?"
+        ],
+        "hidden_variants": [
+          "표시를 배경 패턴에 섞거나 극소 크기로 처리"
+        ],
+        "examples": {
+          "risk": [
+            "AI로 생성한 실사풍 모델 이미지(표시 없음)"
+          ],
+          "safe": [
+            "이미지 하단 'AI로 생성된 이미지입니다' 표시"
+          ]
+        },
+        "exceptions": [
+          "실제와 오인 가능성이 낮은 명백한 일러스트·만화풍(시행령 기준 확인)"
+        ],
+        "severity_rules": {
+          "high": "실사풍 AI 생성물인데 표시 없음",
+          "caution": "AI 생성 의심되나 신고 정보 없음(미검증 병행)",
+          "safe": "표시 적정 또는 비해당"
+        },
+        "legal_basis": [
+          "인공지능 발전과 신뢰 기반 조성 등에 관한 기본법(AI기본법) 및 시행령·고시"
+        ],
+        "notes": []
+      },
+      {
+        "code": "SYNTHETIC_PERSON",
+        "group": "AI_DIGITAL_RISK",
+        "group_name_ko": "AI·디지털 리스크",
+        "name_ko": "딥페이크·실존인물 합성",
+        "name_en": "Synthetic Person",
+        "summary": "실존 인물의 얼굴·음성을 합성한 콘텐츠",
+        "applies_to": [
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "실존 인물의 얼굴·음성 합성은 동의가 없으면 퍼블리시티권·초상권·명예훼손 리스크가 크고, 딥페이크 논란으로 번질 수 있다.",
+          "고인 합성(디지털 휴먼 복원)은 유족 동의가 있어도 여론 반발을 점검한다.",
+          "동의가 있어도 AI_GENERATED_LABEL 표시 의무는 별도로 충족해야 한다."
+        ],
+        "checks": [
+          "실존 인물로 식별되는 합성 얼굴·음성이 있는가?",
+          "본인·유족 동의 근거가 있는가?",
+          "AI 생성 표시가 있는가?"
+        ],
+        "hidden_variants": [
+          "이름은 없지만 식별 가능한 닮은꼴 합성"
+        ],
+        "examples": {
+          "risk": [
+            "유명인 얼굴을 합성한 모델이 자사 상품 추천"
+          ],
+          "safe": [
+            "계약 모델 동의 하 디지털 휴먼(AI 표시 포함)"
+          ]
+        },
+        "exceptions": [
+          "완전한 가상 인물"
+        ],
+        "severity_rules": {
+          "high": "동의 없는 실존 인물 합성",
+          "caution": "동의 근거 불명(미검증 병행), 고인 합성",
+          "safe": "가상 인물 또는 동의·표시 완비"
+        },
+        "legal_basis": [
+          "AI기본법",
+          "부정경쟁방지법(퍼블리시티권)",
+          "딥페이크 관련 형사 규정(성적 합성물은 즉시 위험)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DATA_COLLECTION_TEXT",
+        "group": "AI_DIGITAL_RISK",
+        "group_name_ko": "AI·디지털 리스크",
+        "name_ko": "개인정보·위치정보 수집 문구",
+        "name_en": "Data Collection Text",
+        "summary": "이벤트 응모·가입 유도 시 개인정보·위치정보 수집 동의 문구의 적정성",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "개인정보를 수집할 때는 수집 항목, 목적, 보유기간, 거부 권리와 불이익을 고지해야 한다. 마케팅 활용·제3자 제공은 필수 동의와 분리해야 한다.",
+          "'응모하면 자동 동의', '필수 동의에 마케팅 포함'은 위험이다.",
+          "위치정보 수집은 별도 동의가 필요하다. 14세 미만은 법정대리인 동의."
+        ],
+        "checks": [
+          "개인정보 수집 문구가 있는가?",
+          "필수·선택(마케팅·제3자) 동의가 분리되는가?",
+          "보유기간·거부권 안내가 있는가?",
+          "위치정보 수집 시 별도 동의인가?"
+        ],
+        "hidden_variants": [
+          "'참여만 해도 경품' + 작은 글씨 동의 간주"
+        ],
+        "examples": {
+          "risk": [
+            "응모 시 마케팅 정보 수신에 동의한 것으로 간주합니다"
+          ],
+          "safe": [
+            "[필수] 경품 발송용 이름·연락처(이벤트 종료 후 30일 보관) / [선택] 마케팅 수신 동의"
+          ]
+        },
+        "exceptions": [
+          "수집이 없는 단순 홍보"
+        ],
+        "severity_rules": {
+          "high": "동의 간주·묶음 동의",
+          "caution": "고지 항목 일부 누락",
+          "safe": "적정"
+        },
+        "legal_basis": [
+          "개인정보보호법",
+          "정보통신망법(광고성 정보 전송)",
+          "위치정보의 보호 및 이용 등에 관한 법률"
+        ],
+        "notes": []
+      },
+      {
+        "code": "ALT_TEXT_CAPTION",
+        "group": "ACCESSIBILITY",
+        "group_name_ko": "접근성·포용성",
+        "name_ko": "대체텍스트·자막",
+        "name_en": "Alt Text & Caption",
+        "summary": "이미지 대체텍스트·영상 자막 누락",
+        "applies_to": [
+          "image"
+        ],
+        "default_on": false,
+        "severity_cap": "caution",
+        "principles": [
+          "법적 리스크보다 브랜드·포용성 리스크로 본다. 등급 상한은 '주의'.",
+          "웹·앱 게시 이미지에 핵심 정보(가격, 조건)가 이미지로만 있으면 대체텍스트가 필요하다.",
+          "영상은 자막·음성 정보 대체 여부를 확인한다."
+        ],
+        "checks": [
+          "이미지에만 있는 핵심 정보가 있는가?",
+          "대체텍스트·자막이 제공되는가?"
+        ],
+        "hidden_variants": [],
+        "examples": {
+          "risk": [
+            "가격 조건이 이미지에만 있고 대체텍스트 없음"
+          ],
+          "safe": [
+            "대체텍스트에 가격·조건 포함"
+          ]
+        },
+        "exceptions": [
+          "장식용 이미지"
+        ],
+        "severity_rules": {
+          "high": "(상한이 '주의'라 적용하지 않음)",
+          "caution": "핵심 정보의 대체 수단 없음",
+          "safe": "대체 수단 있음"
+        },
+        "legal_basis": [
+          "장애인차별금지법(정보 접근)",
+          "한국형 웹 콘텐츠 접근성 지침(KWCAG)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "COLOR_CONTRAST",
+        "group": "ACCESSIBILITY",
+        "group_name_ko": "접근성·포용성",
+        "name_ko": "색 대비",
+        "name_en": "Color Contrast",
+        "summary": "본문·CTA·고지 문구의 색 대비 부족",
+        "applies_to": [
+          "image"
+        ],
+        "default_on": false,
+        "severity_cap": "caution",
+        "principles": [
+          "텍스트와 배경의 명도 대비가 낮으면 저시력자뿐 아니라 일반 소비자도 읽기 어렵다. 일반 텍스트 4.5:1, 큰 텍스트 3:1을 기준으로 본다.",
+          "고지 문구의 대비가 낮으면 DISCLOSURE(고지 누락)와 연계해 판단한다.",
+          "등급 상한은 '주의'. 단, DISCLOSURE와 연계되면 그 항목에서 상향한다."
+        ],
+        "checks": [
+          "본문·CTA·단서 문구의 대비는?",
+          "고지 문구만 유독 흐린가?"
+        ],
+        "hidden_variants": [
+          "고지 문구만 배경과 비슷한 색"
+        ],
+        "examples": {
+          "risk": [
+            "연회색 배경에 흰색 단서 문구"
+          ],
+          "safe": [
+            "대비 기준 충족"
+          ]
+        },
+        "exceptions": [],
+        "severity_rules": {
+          "high": "(상한이 '주의'라 적용하지 않음)",
+          "caution": "대비 미달",
+          "safe": "기준 충족"
+        },
+        "legal_basis": [
+          "KWCAG(명도 대비)",
+          "WCAG 2.x 대비 기준"
+        ],
+        "notes": []
+      },
+      {
+        "code": "MEMORIAL_CONFLICT",
+        "group": "TIMING_RISK",
+        "group_name_ko": "시점·맥락 리스크",
+        "name_ko": "역사·추모일 충돌",
+        "name_en": "Memorial Conflict",
+        "summary": "게시 예정일이 국가 기념일·추모일·참사 기일과 충돌",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "게시 예정일 ±3일 범위의 국가 추모일·참사 기일을 확인한다. 예: 3·1절, 제주 4·3, 세월호 참사(4.16), 4·19, 5·18, 현충일(6.6), 6·25, 광복절(8.15), 경술국치일(8.29), 이태원 참사(10.29), 제주항공 참사(12.29) 등. 목록은 internal 캘린더로 관리한다.",
+          "기념일 당일의 축제성·할인·유머 톤 콘텐츠는 무신경으로 읽힌다.",
+          "숫자 조합이 추모일 날짜와 겹치는 프로모션명(예: '0416 특가')은 게시 날짜와 무관하게 위험.",
+          "국가 애도 기간이 선포되면 그 기간 전체에 적용한다(뉴스 트리거)."
+        ],
+        "checks": [
+          "게시 예정일 ±3일에 추모·기념일이 있는가?",
+          "콘텐츠 톤이 축제·유머·할인인가?",
+          "숫자·날짜 조합이 추모일과 겹치는가?",
+          "국가 애도 기간 중인가?"
+        ],
+        "hidden_variants": [
+          "프로모션 코드·이벤트명 숫자",
+          "이미지 속 날짜 표기"
+        ],
+        "examples": {
+          "risk": [
+            "4월 16일 '배 터지게 주는 데이터' 이벤트"
+          ],
+          "safe": [
+            "(평일) 데이터 2배 이벤트"
+          ]
+        },
+        "exceptions": [
+          "추모·기념 취지에 맞는 공익 콘텐츠"
+        ],
+        "severity_rules": {
+          "high": "추모일 당일 축제 톤, 추모 날짜 숫자 차용",
+          "caution": "±3일 범위의 유머·할인 톤",
+          "safe": "충돌 없음"
+        },
+        "legal_basis": [
+          "국가기념일 등에 관한 규정",
+          "internal 추모일 캘린더",
+          "Naver 뉴스(국가 애도 기간)"
+        ],
+        "notes": []
+      },
+      {
+        "code": "TIMING",
+        "group": "TIMING_RISK",
+        "group_name_ko": "시점·맥락 리스크",
+        "name_ko": "게시 적절성",
+        "name_en": "Timing",
+        "summary": "계절·이슈·시의성 적합도",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "게시 시점의 계절·날씨·사회 분위기와 콘텐츠 톤이 맞는지 본다(예: 폭염·한파·태풍 중 야외 레저 톤).",
+          "자사 관련 부정 이슈(통신 장애, 보안 사고, 요금 논란)가 진행 중이면 관련 주제 광고는 역풍 위험이 크다.",
+          "경쟁사·업계 이슈와 겹쳐 조롱으로 읽힐 가능성, 철 지난 밈 사용도 점검한다."
+        ],
+        "checks": [
+          "게시 시점에 자사·업계 부정 이슈가 있는가?",
+          "계절·기상 상황과 톤이 맞는가?",
+          "시의성 없는 철 지난 밈인가?"
+        ],
+        "hidden_variants": [],
+        "examples": {
+          "risk": [
+            "(자사 통신 장애 직후) 언제나 연결되는 U+"
+          ],
+          "safe": [
+            "(평시) 언제나 연결되는 U+"
+          ]
+        },
+        "exceptions": [],
+        "severity_rules": {
+          "high": "자사 부정 이슈 진행 중 관련 주제 홍보",
+          "caution": "분위기와 톤 불일치",
+          "safe": "적절"
+        },
+        "legal_basis": [
+          "Naver 뉴스·Grok 실시간 신호"
+        ],
+        "notes": []
+      },
+      {
+        "code": "ELECTION_PERIOD",
+        "group": "TIMING_RISK",
+        "group_name_ko": "시점·맥락 리스크",
+        "name_ko": "선거기간 정치 연상",
+        "name_en": "Election Period",
+        "summary": "선거 캘린더 기준 기간 중 정치 연상 표현",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "선거운동기간·사전투표·선거일 전후에는 정당 색, 기호 번호, '투표·심판·교체' 같은 선거 어휘가 정치 연상으로 읽힐 위험이 커진다.",
+          "선거 캘린더(중앙선거관리위원회 기준, 재·보궐선거 포함)를 internal 데이터로 관리하고, 게시 예정일이 기간 안이면 활성화한다.",
+          "'투표 인증샷 이벤트'처럼 투표 참여와 경품을 연계하면 공직선거법상 제한 소지가 있으니 법무 확인."
+        ],
+        "checks": [
+          "게시 예정일이 선거 관련 기간인가?",
+          "기호 번호·정당색·선거 어휘가 있는가?",
+          "투표 참여와 경품을 연계하는가?"
+        ],
+        "hidden_variants": [
+          "'1번', '2번' 강조 + 색 조합",
+          "'바꿔야 산다', '심판' 류 구호 어휘"
+        ],
+        "examples": {
+          "risk": [
+            "(선거 기간) 이번엔 바꿔야죠! 2번째 회선 무료"
+          ],
+          "safe": [
+            "(선거 기간) 두 번째 회선 무료"
+          ]
+        },
+        "exceptions": [],
+        "severity_rules": {
+          "high": "선거 기간 기호·정당색·구호 조합, 투표 연계 경품",
+          "caution": "선거 어휘 단독 사용",
+          "safe": "기간 외 또는 무관"
+        },
+        "legal_basis": [
+          "공직선거법",
+          "중앙선거관리위원회 선거 일정"
+        ],
+        "notes": []
+      },
+      {
+        "code": "DISASTER_AFTERMATH",
+        "group": "TIMING_RISK",
+        "group_name_ko": "시점·맥락 리스크",
+        "name_ko": "재난·참사 직후",
+        "name_en": "Disaster Aftermath",
+        "summary": "대형 재난·참사 직후의 부적절한 톤·소재",
+        "applies_to": [
+          "naming",
+          "text",
+          "image"
+        ],
+        "default_on": true,
+        "severity_cap": "high",
+        "principles": [
+          "날짜가 고정된 기일이 아니라 실시간 트리거다. 최근 N일(기본 14일) 내 Naver 뉴스에서 재난 키워드(화재, 붕괴, 침몰, 추락, 압사, 지진, 홍수, 참사, 희생자) 급증 시 활성화한다.",
+          "활성 기간에는 재난 소재와 겹치는 표현(불·물·추락·폭발·'터진다', 군중·축제)을 위험으로 상향한다. 통신 광고의 '터진다' 류 표현이 대표적 충돌어다.",
+          "재난 지역 대상 광고·이벤트는 지원·복구 취지가 아니면 보류 권고."
+        ],
+        "checks": [
+          "최근 N일 내 대형 재난 뉴스가 있는가?",
+          "콘텐츠 소재·어휘가 재난과 겹치는가?",
+          "대상 지역이 재난 지역인가?"
+        ],
+        "hidden_variants": [
+          "의성어·이미지 효과(불꽃, 폭발 그래픽)"
+        ],
+        "examples": {
+          "risk": [
+            "(화재 참사 직후) 불타는 할인! 데이터 펑펑 터진다"
+          ],
+          "safe": [
+            "(같은 시기) 이번 달 데이터 혜택 안내"
+          ]
+        },
+        "exceptions": [
+          "재난 지원·복구 안내, 통신 요금 감면 공지"
+        ],
+        "severity_rules": {
+          "high": "재난 소재와 직접 겹치는 표현·이미지",
+          "caution": "간접 연상, 축제·유머 톤",
+          "safe": "재난 없음 또는 무관"
+        },
+        "legal_basis": [
+          "Naver 뉴스 트리거",
+          "internal 재난 키워드 사전"
+        ],
+        "notes": []
+      }
+    ]
+  },
+  "09_output": {
+    "required_elements": [
+      "문제가 되는 요소 (단어·이미지·구도, 위치 포함)",
+      "문제가 되는 이유 (어떻게 읽힐 수 있는지)",
+      "영향받을 수 있는 집단",
+      "Risk Level",
+      "사회적 논란 가능성 (확산 경로와 예상 반응)",
+      "수정 방향",
+      "대체 표현 2~3안 [톤 유지] [안전 우선] [간결]",
+      "이미지 수정 방향 (크롭·제거·재촬영·배치 변경)",
+      "Human Review 필요 여부"
+    ],
+    "rewrite_principles": [
+      "원래 편익을 먼저 파악하고 그 편익을 유지한 채 위험 요소만 제거한다.",
+      "집단 지시어를 제거하고 행동·상황 중심으로 전환한다.",
+      "비교 대상을 사람이 아니라 제품·상태로 바꾼다.",
+      "브랜드 톤을 유지한다. 톤이 크게 달라지면 담당자가 채택하지 않는다."
+    ]
+  }
+}

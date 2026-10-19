@@ -1,0 +1,93 @@
+{
+  "groups": [
+    {
+      "code": "EXPRESSION_RISK",
+      "g": "expression_risk",
+      "name_ko": "표현 리스크",
+      "name_en": "EXPRESSION RISK",
+      "note": "혐오·차별·조롱·커뮤니티 신호 등 표현 자체의 위험을 검수합니다.",
+      "items": [
+        { "code": "HATE", "name_ko": "혐오 표현", "name_en": "HATE", "description": "성별·세대·인종·지역·종교·장애 등 특정 집단에 대한 비하와 조롱", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DISCRIMINATION", "name_ko": "차별(성·연령·지역)", "name_en": "DISCRIMINATION", "description": "성·연령·지역을 열등하게 묘사하는 표현", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "PROFANITY", "name_ko": "비속어·은어", "name_en": "PROFANITY", "description": "비속어·욕설·은어 사용", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "SOCIAL_ISSUE", "name_ko": "사회이슈 연관성", "name_en": "SOCIAL ISSUE", "description": "정치·젠더·이념 등 민감한 사회 담론과의 충돌 가능성", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "COMMUNITY_SIGNAL", "name_ko": "커뮤니티 신호", "name_en": "COMMUNITY SIGNAL", "description": "특정 커뮤니티 말투·상징·밈의 혐오 신호", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "MINOR", "name_ko": "미성년 묘사", "name_en": "MINOR", "description": "미성년자 등장 콘텐츠의 적절성", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "STEREOTYPE", "name_ko": "고정관념 묘사", "name_en": "STEREOTYPE", "description": "성 역할·세대 등 고정관념 재생산 여부", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "DISABILITY_SLUR", "name_ko": "장애 비하 관용어", "name_en": "DISABILITY SLUR", "description": "결정장애, 벙어리 ~ 등 장애를 비하하는 관용어", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "APPEARANCE_STATUS", "name_ko": "외모·직업·학력 비하", "name_en": "APPEARANCE STATUS", "description": "외모·직업·학력을 열등하게 묘사하거나 조롱", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "POLITICAL_RELIGIOUS", "name_ko": "정치·종교 연상", "name_en": "POLITICAL RELIGIOUS", "description": "정당 색·숫자 조합, 종교 상징 연상", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "UNSAFE_BEHAVIOR", "name_ko": "위험행동 조장", "name_en": "UNSAFE BEHAVIOR", "description": "운전 중 폰 사용, 음주, 도박 연상 등 위험행동 조장", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false }
+      ]
+    },
+    {
+      "code": "COMPLIANCE_RISK",
+      "g": "compliance_risk",
+      "name_ko": "법적·컴플라이언스 리스크",
+      "name_en": "COMPLIANCE RISK",
+      "note": "광고법·개인정보·저작권 등 법적·규제 위험을 검수합니다.",
+      "items": [
+        { "code": "AD_LAW", "name_ko": "표시광고법", "name_en": "AD LAW", "description": "최상급·절대 표현, 근거 없는 효능", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true, "channel_weights": { "SNS": 1.1, "TV": 1.15 } },
+        { "code": "PRIVACY", "name_ko": "개인정보", "name_en": "PRIVACY", "description": "이미지 내 얼굴·차량번호·화면캡처", "applies_to": ["image", "text"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DEFAMATION", "name_ko": "경쟁사 비방", "name_en": "DEFAMATION", "description": "경쟁사·특정 사업자를 비방하는 표현", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "COPYRIGHT", "name_ko": "저작권·초상권", "name_en": "COPYRIGHT", "description": "폰트·이미지·BGM, 타사 로고", "applies_to": ["image", "naming"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DISCLOSURE", "name_ko": "약관·고지 누락", "name_en": "DISCLOSURE", "description": "부가세, 약정, 속도 제한 등 중요 조건 고지 누락", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "AD_DISCLOSURE", "name_ko": "광고 표시 고지", "name_en": "AD DISCLOSURE", "description": "뒷광고, 조건부·불확정 표현, 유료광고 표기", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true, "channel_weights": { "SNS": 1.3, "APP_PUSH": 1.2 } },
+        { "code": "COMPARATIVE_AD", "name_ko": "비교광고", "name_en": "COMPARATIVE AD", "description": "비방이 아니어도 근거 없는 '타사 대비 N배'", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "TRADEMARK_PUBLICITY", "name_ko": "상표·퍼블리시티권", "name_en": "TRADEMARK PUBLICITY", "description": "유명인 이름·이미지 무단 사용, 부정경쟁방지법", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DARK_PATTERN", "name_ko": "다크패턴", "name_en": "DARK PATTERN", "description": "허위 긴급성 '오늘만', 숨은 자동갱신, 해지 방해", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "GREENWASHING", "name_ko": "그린워싱", "name_en": "GREENWASHING", "description": "근거 없는 친환경·탄소중립 표현", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true }
+      ]
+    },
+    {
+      "code": "TELECOM_RISK",
+      "g": "telecom_risk",
+      "name_ko": "통신업 특화 리스크",
+      "name_en": "TELECOM RISK",
+      "note": "요금·속도·무제한·지원금 등 통신 광고 특화 규제를 검수합니다.",
+      "items": [
+        { "code": "RATE_MATERIAL_NOTICE", "name_ko": "요금·혜택 중요사항 고지", "name_en": "RATE MATERIAL NOTICE", "description": "위약금·약정·결합조건 누락 (전기통신사업법 이용자 이익저해 금지행위)", "applies_to": ["naming", "text"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "SPEED_QUALITY_CLAIM", "name_ko": "속도·품질 과장", "name_en": "SPEED QUALITY CLAIM", "description": "이론상 최대속도를 체감속도처럼 표현. 5G 속도 과장 공정위 제재 사례", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "UNLIMITED_CLAIM", "name_ko": "\"무제한\" 표현", "name_en": "UNLIMITED CLAIM", "description": "소진 후 속도제어(QoS) 조건 병기 여부", "applies_to": ["naming", "text"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DEVICE_SUBSIDY", "name_ko": "단말 지원금·공짜폰", "name_en": "DEVICE SUBSIDY", "description": "단통법 폐지 후 전기통신사업법 이관 조항 기준", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "BUNDLED_FINANCE", "name_ko": "제휴카드·금융 결합 할인", "name_en": "BUNDLED FINANCE", "description": "카드 할인을 요금 할인처럼 표기", "applies_to": ["naming", "text"], "default_on": true, "severity_cap": null, "rag_required": true }
+      ]
+    },
+    {
+      "code": "AI_DIGITAL_RISK",
+      "g": "ai_digital_risk",
+      "name_ko": "AI·디지털 리스크",
+      "name_en": "AI DIGITAL RISK",
+      "note": "생성형 AI 표시 의무와 합성·수집 문구를 검수합니다.",
+      "items": [
+        { "code": "AI_GENERATED_LABEL", "name_ko": "AI 생성물 표시", "name_en": "AI GENERATED LABEL", "description": "AI기본법상 생성형 AI 결과물 표시 의무 (이미지·영상 탭 필수 체크)", "applies_to": ["image", "video"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "SYNTHETIC_PERSON", "name_ko": "딥페이크·실존인물 합성", "name_en": "SYNTHETIC PERSON", "description": "실존 인물 얼굴·음성을 합성한 콘텐츠", "applies_to": ["image", "video"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DATA_COLLECTION_TEXT", "name_ko": "개인정보·위치정보 수집 문구", "name_en": "DATA COLLECTION TEXT", "description": "이벤트 응모 동의 문구 적정성", "applies_to": ["text", "naming"], "default_on": true, "severity_cap": null, "rag_required": true }
+      ]
+    },
+    {
+      "code": "ACCESSIBILITY",
+      "g": "accessibility",
+      "name_ko": "접근성·포용성",
+      "name_en": "ACCESSIBILITY",
+      "note": "법적 리스크가 아니라 브랜드 리스크. 등급 상한은 주의입니다. 기본 비활성.",
+      "items": [
+        { "code": "ALT_TEXT_CAPTION", "name_ko": "대체텍스트·자막", "name_en": "ALT TEXT CAPTION", "description": "이미지 대체텍스트·영상 자막 누락", "applies_to": ["image", "video"], "default_on": false, "severity_cap": "med", "rag_required": false },
+        { "code": "COLOR_CONTRAST", "name_ko": "색 대비", "name_en": "COLOR CONTRAST", "description": "본문·CTA 색 대비 부족", "applies_to": ["image"], "default_on": false, "severity_cap": "med", "rag_required": false }
+      ]
+    },
+    {
+      "code": "TIMING_RISK",
+      "g": "timing_risk",
+      "name_ko": "시점·맥락 리스크",
+      "name_en": "TIMING RISK",
+      "note": "게시 예정일과 사회적 분위기의 충돌을 검수합니다.",
+      "items": [
+        { "code": "MEMORIAL_CONFLICT", "name_ko": "역사·추모일 충돌", "name_en": "MEMORIAL CONFLICT", "description": "국가 애도·재난 등 추모 분위기와의 충돌", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "TIMING_APPROPRIATENESS", "name_ko": "게시 적절성", "name_en": "TIMING", "description": "계절·이슈·시의성 적합도", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false },
+        { "code": "ELECTION_PERIOD", "name_ko": "선거기간 정치 연상", "name_en": "ELECTION PERIOD", "description": "선거 캘린더 기반 정치 연상 표현", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": true },
+        { "code": "DISASTER_AFTERMATH", "name_ko": "재난·참사 직후", "name_en": "DISASTER AFTERMATH", "description": "Naver 뉴스 트리거로 동적 활성화. 최근 N일 내 재난 키워드 급증 시", "applies_to": ["naming", "text", "image"], "default_on": true, "severity_cap": null, "rag_required": false }
+      ]
+    }
+  ]
+}
